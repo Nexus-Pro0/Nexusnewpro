@@ -954,7 +954,7 @@
         </svg>
       </button>
       <div class="notes-wrap" id="notesWrap">
-        <textarea id="notes" placeholder="Nachricht schreiben …" rows="1" autocorrect="off" autocapitalize="off" spellcheck="false" autocomplete="off"></textarea>
+        <textarea id="notes" placeholder="Nachricht schreiben …" rows="1" autocorrect="on" autocapitalize="sentences" spellcheck="true" autocomplete="off"></textarea>
         <div class="record-live" id="recordLive">
           <span class="rec-dot"></span>
           <span class="rec-time" id="recLiveTime">0:00</span>
@@ -1051,6 +1051,77 @@
     }
   }
   const SESSION_ID = getSessionId();
+
+  // ── Chatverlauf für 48 Stunden speichern ────────────────────
+  // Nachrichten werden lokal im Browser abgelegt, damit sie einen
+  // Neustart der App überstehen. Älter als 48 Stunden -> wird beim
+  // nächsten Laden automatisch entfernt.
+  const CHAT_HISTORY_KEY = 'nexus_chat_history';
+  const CHAT_HISTORY_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+
+  function loadChatHistory(){
+    try{
+      const raw = localStorage.getItem(CHAT_HISTORY_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    }catch(e){
+      return [];
+    }
+  }
+
+  function pruneChatHistory(list){
+    const cutoff = Date.now() - CHAT_HISTORY_MAX_AGE_MS;
+    return list.filter(item => typeof item.ts === 'number' && item.ts >= cutoff);
+  }
+
+  function saveChatHistory(list){
+    try{
+      localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(list));
+    }catch(e){
+      // z.B. Speicher voll oder privater Modus — Verlauf läuft dann
+      // einfach nur innerhalb der aktuellen Sitzung, ohne Fehler.
+    }
+  }
+
+  function appendToChatHistory(entry){
+    const list = pruneChatHistory(loadChatHistory());
+    list.push(entry);
+    saveChatHistory(list);
+  }
+
+  function blobToBase64(blob){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function restoreChatHistory(){
+    const pruned = pruneChatHistory(loadChatHistory());
+    saveChatHistory(pruned);
+    if (!pruned.length) return;
+
+    for (const item of pruned){
+      const atDate = new Date(item.ts);
+      if (item.type === 'text'){
+        const { ticks } = addTextBubble(item.text, item.direction, atDate);
+        if (ticks) confirmTicks(ticks);
+      } else if (item.type === 'audio' && item.audioDataUrl){
+        try{
+          const res = await fetch(item.audioDataUrl);
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const { ticks } = addVoiceBubble(url, item.peaks || null, item.direction, atDate);
+          if (ticks) confirmTicks(ticks);
+        }catch(e){
+          // Einzelne Sprachnachricht konnte nicht wiederhergestellt
+          // werden — restlichen Verlauf trotzdem weiter anzeigen.
+        }
+      }
+    }
+  }
 
   // ── Push-Benachrichtigungen ─────────────────────────────────
   // Ablauf: Service Worker registrieren -> Nutzer fragen -> beim
@@ -1321,7 +1392,7 @@
     return row;
   }
 
-  function addTextBubble(text, direction){
+  function addTextBubble(text, direction, atDate){
     hideEmptyState();
     const row = document.createElement('div');
     row.className = `row ${direction}`;
@@ -1333,7 +1404,7 @@
     meta.className = 'meta';
     const time = document.createElement('span');
     time.className = 'timestamp';
-    time.textContent = formatClock(new Date());
+    time.textContent = formatClock(atDate || new Date());
     meta.appendChild(time);
     let ticks = null;
     if (direction === 'out'){
@@ -1439,7 +1510,7 @@
     return container;
   }
 
-  function addVoiceBubble(blobUrl, peaks, direction){
+  function addVoiceBubble(blobUrl, peaks, direction, atDate){
     hideEmptyState();
     const row = document.createElement('div');
     row.className = `row ${direction}`;
@@ -1451,7 +1522,7 @@
     meta.className = 'meta';
     const time = document.createElement('span');
     time.className = 'timestamp';
-    time.textContent = formatClock(new Date());
+    time.textContent = formatClock(atDate || new Date());
     meta.appendChild(time);
     let ticks = null;
     if (direction === 'out'){
@@ -1855,10 +1926,19 @@
     if (text){
       const { ticks } = addTextBubble(text, 'out');
       sentTicks.push(ticks);
+      appendToChatHistory({ type: 'text', direction: 'out', text, ts: Date.now() });
     }
     if (outgoingAudioUrl){
       const { ticks } = addVoiceBubble(outgoingAudioUrl, peaksToSend, 'out');
       sentTicks.push(ticks);
+      try{
+        const audioDataUrl = await blobToBase64(audioBlob);
+        appendToChatHistory({ type: 'audio', direction: 'out', audioDataUrl, peaks: peaksToSend, ts: Date.now() });
+      }catch(e){
+        // Falls die Sprachnachricht nicht in Base64 umgewandelt werden kann,
+        // wird sie einfach nicht dauerhaft gespeichert — der Versand selbst
+        // ist davon nicht betroffen.
+      }
     }
 
     // Anfrage-Body: session_id (stabil pro Nutzer/Gerät), Zeitstempel,
@@ -1918,6 +1998,7 @@
 
       if (replyText){
         addTextBubble(replyText, 'in');
+        appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now() });
       }
 
     }catch(err){
@@ -1935,6 +2016,60 @@
     }
     handleSend();
   });
+
+  // Gespeicherten Chatverlauf (bis 48 Std. alt) beim Start wiederherstellen
+  const chatRestored = restoreChatHistory();
+
+  // ── Push-Nachrichten in den Chat einspeisen ─────────────────
+  // Der Service Worker meldet jede eingehende Push-Nachricht hierher.
+  // Ist die App offen, erscheint sie sofort als Bubble. War die App zu,
+  // liefert der Service Worker sie beim naechsten Oeffnen nach.
+  // Jede eingespeiste Nachricht wandert zusaetzlich in den 48-Std-Verlauf.
+  (function initPushInbox(){
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+    const seen = new Set();
+
+    function show(item){
+      if (!item) return;
+      const text = item.body || item.title || '';
+      if (!text) return;
+      const key = item.id || (text + '|' + (item.ts || ''));
+      if (seen.has(key)) return;
+      seen.add(key);
+      addTextBubble(text, 'in');
+      appendToChatHistory({ type: 'text', direction: 'in', text: text, ts: item.ts || Date.now() });
+    }
+
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      const msg = event.data || {};
+      if (msg.type === 'nexus-push') show(msg.payload);
+      if (msg.type === 'nexus-drain-result') (msg.items || []).forEach(show);
+    });
+
+    async function drain(){
+      try{
+        const reg = await navigator.serviceWorker.ready;
+        const target = (reg && reg.active) || navigator.serviceWorker.controller;
+        if (!target) return;
+        const ch = new MessageChannel();
+        ch.port1.onmessage = (e) => {
+          const msg = e.data || {};
+          if (msg.type === 'nexus-drain-result') (msg.items || []).forEach(show);
+        };
+        target.postMessage({ type: 'nexus-drain' }, [ch.port2]);
+      }catch(e){ /* ignorieren */ }
+    }
+
+    // Erst den gespeicherten Verlauf aufbauen, dann geparkte Pushes anhaengen,
+    // damit die Reihenfolge im Chat stimmt.
+    Promise.resolve(chatRestored).catch(() => {}).then(drain);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') drain();
+    });
+  })();
 </script>
 
 </body>

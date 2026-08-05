@@ -2038,7 +2038,7 @@
       const key = item.id || (text + '|' + (item.ts || ''));
       if (seen.has(key)) return;
       seen.add(key);
-      addTextBubble(text, 'in');
+      addTextBubble(text, 'in', item.ts ? new Date(item.ts) : undefined);
       appendToChatHistory({ type: 'text', direction: 'in', text: text, ts: item.ts || Date.now() });
     }
 
@@ -2079,6 +2079,7 @@
     });
   })();
 </script>
+<script src="/nexus-sync.js"></script>
 
 </body>
 </html>

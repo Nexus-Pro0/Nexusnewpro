@@ -2064,10 +2064,18 @@
 
     // Erst den gespeicherten Verlauf aufbauen, dann geparkte Pushes anhaengen,
     // damit die Reihenfolge im Chat stimmt.
-    Promise.resolve(chatRestored).catch(() => {}).then(drain);
+    // Mehrfach nachfassen: Tippt der Nutzer direkt auf die Push-Meldung,
+    // ist die App u. U. schneller offen, als der Service Worker die
+    // Nachricht abgelegt hat. Doppelte faengt das seen-Set ab.
+    function drainRepeatedly(){
+      drain();
+      [800, 2500, 6000].forEach((ms) => setTimeout(drain, ms));
+    }
+
+    Promise.resolve(chatRestored).catch(() => {}).then(drainRepeatedly);
 
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') drain();
+      if (document.visibilityState === 'visible') drainRepeatedly();
     });
   })();
 </script>

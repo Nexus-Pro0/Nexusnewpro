@@ -51,7 +51,8 @@ async function deliver(item){
     q.push(item);
     await writeQueue(q);
   });
-  self.addEventListener('push', (event) => {
+  }
+self.addEventListener('push', (event) => {
   let data = {};
   try {
     data = event.data ? event.data.json() : {};
@@ -116,4 +117,3 @@ self.addEventListener('notificationclick', (event) => {
     })
   );
 });
-}

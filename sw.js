@@ -1,6 +1,9 @@
 // Nexus Pro — Service Worker
 // Aufgabe: Push-Nachrichten empfangen (auch wenn die App nicht offen ist),
 // als System-Benachrichtigung anzeigen UND in den Chat der App einspeisen.
+// Ist die App gerade offen, geht die Nachricht direkt per postMessage an
+// das Fenster. Ist sie zu, wird sie in einer Warteschlange geparkt und
+// beim naechsten Oeffnen nachgeliefert.
 
 const PUSH_CACHE = 'nexus-push-v1';
 const QUEUE_URL = '/__nexus_push_queue__';
@@ -13,6 +16,9 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+// Alle Queue-Zugriffe werden serialisiert. Sonst kann die App die Queue
+// auslesen und leeren, waehrend ein Push gerade hineingeschrieben wird —
+// der Eintrag geht dann verloren bzw. taucht erst beim naechsten Oeffnen auf.
 let queueLock = Promise.resolve();
 function withQueue(fn){
   const run = queueLock.then(fn, fn);
@@ -41,17 +47,26 @@ async function writeQueue(arr){
 
 async function deliver(item){
   const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-  const live = clientList.filter((c) => c.visibilityState === 'visible');
+  // Nur die App selbst zaehlt als Empfaenger. Andere Seiten derselben Domain
+  // (z. B. ein offener /sw.js-Tab) sind zwar sichtbar, koennen die Nachricht
+  // aber nicht anzeigen — sie ging dadurch verloren.
+  const appClients = clientList.filter((c) => {
+    try { const p = new URL(c.url).pathname; return p === '/' || p === '/index.html'; }
+    catch (e) { return false; }
+  });
+  const live = appClients.filter((c) => c.visibilityState === 'visible');
   if (live.length > 0){
+    // App ist offen und sichtbar -> direkt in den Chat
     live.forEach((c) => c.postMessage({ type: 'nexus-push', payload: item }));
     return;
   }
+  // App ist zu oder im Hintergrund -> parken (atomar)
   await withQueue(async () => {
     const q = await readQueue();
     q.push(item);
     await writeQueue(q);
   });
-  }
+}// Eingehende Push-Nachricht anzeigen
 self.addEventListener('push', (event) => {
   let data = {};
   try {
@@ -81,6 +96,7 @@ self.addEventListener('push', (event) => {
   ]));
 });
 
+// Die App fragt beim Start bzw. beim Zurueckkehren nach geparkten Nachrichten
 self.addEventListener('message', (event) => {
   const msg = event.data || {};
   if (msg.type !== 'nexus-drain') return;
@@ -99,6 +115,7 @@ self.addEventListener('message', (event) => {
   })());
 });
 
+// Klick auf die Benachrichtigung: App oeffnen bzw. in den Vordergrund holen
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const targetUrl = (event.notification.data && event.notification.data.url) || '/';

@@ -142,15 +142,25 @@
         .filter(function (e) { return e && e.type === 'text' && e.text; })
         .slice(-40);
 
-      var res = await fetch(API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: kundenCode,
-          entries: eigeneTexte,
-          deleted: deleted
-        })
-      });
+      // Ohne Zeitlimit haengt der Sync bei schlechtem Netz unbegrenzt und
+      // blockiert jeden weiteren Durchgang (laeuft-Flag bleibt gesetzt).
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var abbruch = ctrl ? setTimeout(function () { ctrl.abort(); }, 15000) : null;
+      var res;
+      try {
+        res = await fetch(API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: kundenCode,
+            entries: eigeneTexte,
+            deleted: deleted
+          }),
+          signal: ctrl ? ctrl.signal : undefined
+        });
+      } finally {
+        if (abbruch) clearTimeout(abbruch);
+      }
       if (!res.ok) return;
 
       var data = await res.json();
@@ -198,6 +208,11 @@
       var chatEl = document.getElementById('chat');
       if (!chatEl || typeof restoreChatHistory !== 'function') return;
       renderLaeuft = true;
+      // Position merken: wer oben liest, soll nach dem Neuaufbau an
+      // derselben Stelle stehen und nicht ans Ende geworfen werden.
+      var warUnten = (chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight) < 240;
+      var vonUnten = chatEl.scrollHeight - chatEl.scrollTop;
+      chatEl.classList.add('nx-ohne-fx');
       var rows = chatEl.querySelectorAll('.row');
       for (var i = 0; i < rows.length; i++) rows[i].remove();
       Promise.resolve(restoreChatHistory())
@@ -205,6 +220,11 @@
         .then(function () {
           renderLaeuft = false;
           leerZustandPruefen();
+          requestAnimationFrame(function () {
+            if (warUnten) chatEl.scrollTop = chatEl.scrollHeight - chatEl.clientHeight;
+            else chatEl.scrollTop = chatEl.scrollHeight - vonUnten;
+            requestAnimationFrame(function () { chatEl.classList.remove('nx-ohne-fx'); });
+          });
         });
     } catch (e) {
       renderLaeuft = false;
@@ -264,6 +284,29 @@
   var folgenBis = 0;
   var folgtGerade = false;
   var letzterFrame = 0;
+  // Solange die Tastatur auf- oder zufaehrt, wird NICHT eigenstaendig
+  // animiert. Der Chat klebt dann in jedem Bild exakt am Ziel und folgt
+  // damit 1:1 der Hoehen-Transition des Containers. Zwei unabhaengige
+  // Animationen uebereinander waren genau das, was abgehackt aussah.
+  var klebenBis = 0;
+  // Sobald der Finger (oder das Mausrad) selbst scrollt, hat der Nutzer
+  // Vorrang: jede laufende Animation wird sofort abgebrochen. Sonst
+  // zieht die Animation gegen den Finger — das war das Haken und das
+  // ploetzliche Zurueckspringen beim Hochscrollen.
+  var nutzerAktiv = false;
+  var NAH_AM_ENDE = 240;
+
+  function abstandZumEnde() {
+    if (!chatEl) return 0;
+    return chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight;
+  }
+
+  function animationAus() {
+    klebenBis = 0;
+    folgenBis = 0;
+    folgtGerade = false;
+    letzterFrame = 0;
+  }
 
   function scrollZielJetzt() {
     return Math.max(0, chatEl.scrollHeight - chatEl.clientHeight);
@@ -271,17 +314,24 @@
 
   function folgeSchritt(zeit) {
     if (!chatEl) { folgtGerade = false; return; }
+    if (nutzerAktiv) { animationAus(); return; }
     var dt = letzterFrame ? Math.min(64, zeit - letzterFrame) : 16;
     letzterFrame = zeit;
 
     var ziel = scrollZielJetzt();
     var diff = ziel - chatEl.scrollTop;
+    var jetzt = Date.now();
 
-    if (Math.abs(diff) > 0.5) {
+    if (jetzt < klebenBis) {
+      // Tastaturphase: hart ans Ziel, jedes Bild neu.
+      if (Math.abs(diff) > 0.5) chatEl.scrollTop = ziel;
+    } else if (Math.abs(diff) > 0.5) {
       // Zeitkonstante 70 ms -> nach ca. 250 ms praktisch angekommen,
       // unabhaengig davon, ob der Bildschirm mit 60 oder 120 Hz laeuft.
       chatEl.scrollTop += diff * (1 - Math.exp(-dt / 70));
     }
+
+    if (jetzt < klebenBis) { requestAnimationFrame(folgeSchritt); return; }
 
     if (Math.abs(ziel - chatEl.scrollTop) <= 0.5 && Date.now() > folgenBis) {
       chatEl.scrollTop = ziel;
@@ -294,6 +344,9 @@
 
   function scrollToBottomWeich() {
     if (!chatEl) return;
+    // Wer weiter oben liest, wird nicht nach unten gerissen — genau wie
+    // in WhatsApp. Erst wenn man wieder unten steht, folgt der Chat.
+    if (nutzerAktiv || abstandZumEnde() > NAH_AM_ENDE) return;
     var ziel = scrollZielJetzt();
     var diff = ziel - chatEl.scrollTop;
 
@@ -312,9 +365,60 @@
     requestAnimationFrame(folgeSchritt);
   }
 
+  function loopStarten() {
+    if (folgtGerade) return;
+    folgtGerade = true;
+    letzterFrame = 0;
+    requestAnimationFrame(folgeSchritt);
+  }
+
+  // Die Tastatur laeuft in etwa 250-300 ms. Wir kleben etwas laenger,
+  // damit auch das Nachfedern von iOS noch abgedeckt ist.
+  // vorrang=true nur dort, wo der Nutzer selbst ins Eingabefeld getippt
+  // hat. Beim Schliessen der Tastatur (blur) darf das Kleben NICHT gegen
+  // einen Finger arbeiten, der gerade im Chat nach oben zieht.
+  function tastaturphase(ms, vorrang) {
+    if (vorrang) nutzerAktiv = false;
+    if (nutzerAktiv) return;
+    klebenBis = Date.now() + (ms || 800);
+    folgenBis = klebenBis;
+    loopStarten();
+  }
+
   if (chatEl) {
     chatEl.style.scrollBehavior = 'auto'; // wir animieren selbst
     window.scrollToBottom = scrollToBottomWeich;
+
+    var ruheTimer = null;
+    function nutzerBeginnt() {
+      nutzerAktiv = true;
+      animationAus();
+      clearTimeout(ruheTimer);
+    }
+    function nutzerEndetGleich() {
+      clearTimeout(ruheTimer);
+      // Momentum laeuft nach dem Loslassen noch weiter — erst danach
+      // darf wieder automatisch gefolgt werden.
+      ruheTimer = setTimeout(function () { nutzerAktiv = false; }, 700);
+    }
+    chatEl.addEventListener('touchstart', nutzerBeginnt, { passive: true });
+    chatEl.addEventListener('touchend', nutzerEndetGleich, { passive: true });
+    chatEl.addEventListener('touchcancel', nutzerEndetGleich, { passive: true });
+    chatEl.addEventListener('wheel', function () {
+      nutzerBeginnt();
+      nutzerEndetGleich();
+    }, { passive: true });
+
+    var eingabe = document.getElementById('notes');
+    if (eingabe) {
+      eingabe.addEventListener('focus', function () { tastaturphase(900, true); });
+      eingabe.addEventListener('blur', function () { tastaturphase(700, false); });
+      // Beim Tippen waechst das Textfeld mit -> Chat wird kuerzer.
+      eingabe.addEventListener('input', function () { tastaturphase(220, true); });
+    }
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', function () { tastaturphase(500, false); });
+    }
   }
 
   // ── 2. Bubbles markieren, damit man sie zuordnen kann ──────
@@ -350,9 +454,19 @@
          damit stattdessen unser Menue aufgeht. Am Laptop bleibt das
          normale Markieren erhalten, dort geht das Menue per Rechtsklick. */
       '@media (hover:none){',
-      '  .bubble{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}',
-      '  .bubble.audio-bubble{-webkit-user-select:none;}',
+      '  .chat, .chat *{-webkit-touch-callout:none!important;-webkit-user-select:none!important;',
+      '    -moz-user-select:none!important;-ms-user-select:none!important;user-select:none!important;}',
       '}',
+      /* Der Container aendert seine Hoehe beim Tastatur-Oeffnen per
+         Transition. Kuerzer und mit flacherer Kurve liegt sie deutlich
+         naeher an der nativen Tastatur-Animation. */
+      '.app{transition:height .28s cubic-bezier(.22,.61,.36,1),',
+      '  transform .28s cubic-bezier(.22,.61,.36,1)!important;}',
+      '.chat{scroll-behavior:auto!important;-webkit-overflow-scrolling:touch;',
+      '  overscroll-behavior:contain;}',
+      /* Beim Neuaufbau sollen nicht alle Zeilen gleichzeitig einfliegen —
+         das sah aus wie ein Ruckler. */
+      '.chat.nx-ohne-fx .row{animation:none!important;}',
       '.row.nx-gedrueckt > div > .bubble{filter:brightness(1.18);transition:filter .12s ease;}',
       '.row.nx-weg{opacity:0;transform:translateX(24px) scale(.96);transition:opacity .18s ease,transform .18s ease;}',
       '.nx-back{position:fixed;inset:0;z-index:99998;background:transparent;}',
@@ -598,8 +712,16 @@
   var ICON_KOPIE = 'M9 9V6.5A1.5 1.5 0 0 1 10.5 5h7A1.5 1.5 0 0 1 19 6.5v7A1.5 1.5 0 0 1 17.5 15H15M6.5 9h7A1.5 1.5 0 0 1 15 10.5v7A1.5 1.5 0 0 1 13.5 19h-7A1.5 1.5 0 0 1 5 17.5v-7A1.5 1.5 0 0 1 6.5 9Z';
   var ICON_MUELL = 'M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7m-7 0 .8 11.1A1.5 1.5 0 0 0 9.3 19.5h5.4a1.5 1.5 0 0 0 1.5-1.4L17 7';
 
+  function auswahlWeg() {
+    try {
+      var sel = window.getSelection && window.getSelection();
+      if (sel && sel.removeAllRanges) sel.removeAllRanges();
+    } catch (e) { /* egal */ }
+  }
+
   function menuOeffnen(row, x, y) {
     menuSchliessen();
+    auswahlWeg();
     tippen();
 
     var back = document.createElement('div');
@@ -685,6 +807,24 @@
         druckTimer = null;
       }, LONGPRESS_MS);
     }, { passive: true });
+
+    // Auf dem Handy startete der lange Druck zusaetzlich die native
+    // Textauswahl — dann lag ueber dem Menue eine blaue Markierung, die
+    // sich beim Ziehen ueber die ganze Seite ausbreitete. Das Ereignis
+    // wird hier abgefangen, bevor der Browser die Auswahl aufzieht.
+    var touchAktiv = false;
+    chatEl.addEventListener('touchstart', function () { touchAktiv = true; }, { passive: true });
+    chatEl.addEventListener('touchend', function () {
+      touchAktiv = false;
+      setTimeout(auswahlWeg, 0);
+    }, { passive: true });
+    chatEl.addEventListener('touchcancel', function () { touchAktiv = false; }, { passive: true });
+
+    document.addEventListener('selectstart', function (ev) {
+      if (!touchAktiv && !menuOffen) return;
+      var t = ev.target;
+      if (t && t.closest && (t.closest('#chat') || t.closest('.nx-menu'))) ev.preventDefault();
+    });
 
     chatEl.addEventListener('touchmove', function (ev) {
       if (!druckTimer) return;
@@ -887,10 +1027,22 @@
   function starteIntervall() {
     if (intervallId) return;
     intervallId = setInterval(function () { sync(true); }, SYNC_INTERVAL_MS);
-    document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible') sync(true);
-    });
   }
+  function stoppeIntervall() {
+    if (!intervallId) return;
+    clearInterval(intervallId);
+    intervallId = null;
+  }
+
+  // Im Hintergrund braucht niemand den Sync — das spart auf dem Handy
+  // Akku und Netz. Beim Zurueckkommen wird sofort einmal abgeglichen.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') {
+      if (kundenCode) { starteIntervall(); sync(true); }
+    } else {
+      stoppeIntervall();
+    }
+  });
 
   if (!kundenCode) {
     overlayZeigen();
@@ -900,4 +1052,300 @@
     setTimeout(function () { sync(true); }, 400);
     starteIntervall();
   }
+})();
+
+/* ============================================================
+   Aufnahme-Visualizer ("Strahl")
+   ------------------------------------------------------------
+   Ersetzt optisch die 32 Balken in #recLiveWave durch ein
+   durchgehendes, fliessendes Band mit wanderndem Farbverlauf.
+
+   Wichtig: index.html wird NICHT angefasst. Die Original-Balken
+   laufen unveraendert weiter, sie werden nur per CSS versteckt.
+   Faellt hier irgendetwas aus, bleibt die alte Darstellung
+   sichtbar — die Aufnahme selbst kann dieser Code nicht stoeren,
+   weil er nur einen zusaetzlichen AnalyserNode an den Stream
+   haengt und sonst nichts veraendert.
+   ============================================================ */
+(function () {
+  'use strict';
+
+  var wave = document.getElementById('recLiveWave');
+  if (!wave || !window.requestAnimationFrame) return;
+
+  var AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+
+  var md = navigator.mediaDevices;
+  if (!md || typeof md.getUserMedia !== 'function') return;
+
+  // ---------- Aussehen ----------
+  var HOEHE      = 30;    // CSS-Hoehe des Bandes
+  var PUNKTE     = 96;    // Stuetzpunkte der Kurve
+  var TAKT_MS    = 30;    // wie oft ein neuer Wert nachrueckt
+  var ATTACK     = 0.34;  // schnell hoch
+  var RELEASE    = 0.09;  // langsam runter
+  var RUHE       = 0.65;  // halbe Dicke bei Stille (px)
+  var DICKE      = 0.52;  // wie viel der halben Hoehe max. gefuellt wird
+  var WANDER     = 0.00042; // Tempo des wandernden Verlaufs
+  var WELLE_A    = 0.30;  // Ausschlag der Grundwelle (Anteil halbe Hoehe)
+  var WELLE_T    = 0.00075; // Tempo der Grundwelle
+
+  var stil = document.createElement('style');
+  stil.textContent =
+    '.rec-wave.nx-beam{display:block;position:relative;height:' + HOEHE + 'px;overflow:visible;}' +
+    '.rec-wave.nx-beam > span{display:none !important;}' +
+    '.rec-wave.nx-beam > canvas{display:block;width:100%;height:100%;}';
+  document.head.appendChild(stil);
+
+  var canvas = document.createElement('canvas');
+  var ctx = null;
+  try { ctx = canvas.getContext('2d'); } catch (e) { ctx = null; }
+  if (!ctx) return;
+  wave.appendChild(canvas);
+
+  var breiteCss = 0, hoeheCss = 0, dpr = 1;
+
+  function groesseSetzen() {
+    var r = wave.getBoundingClientRect();
+    var w = Math.max(1, Math.round(r.width));
+    var h = Math.max(1, Math.round(r.height)) || HOEHE;
+    var d = Math.min(3, window.devicePixelRatio || 1);
+    if (w === breiteCss && h === hoeheCss && d === dpr) return;
+    breiteCss = w; hoeheCss = h; dpr = d;
+    canvas.width = Math.round(w * d);
+    canvas.height = Math.round(h * d);
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+  }
+
+  if (window.ResizeObserver) {
+    try { new ResizeObserver(groesseSetzen).observe(wave); } catch (e) {}
+  }
+  window.addEventListener('orientationchange', function () { setTimeout(groesseSetzen, 250); });
+  window.addEventListener('resize', groesseSetzen);
+
+  // ---------- Farben aus dem Theme ----------
+  function cssFarbe(name, fallback) {
+    try {
+      var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      return v || fallback;
+    } catch (e) { return fallback; }
+  }
+  var FARBE_A = cssFarbe('--accent-a', '#5b6ef5');
+  var FARBE_B = cssFarbe('--accent-b', '#8c5cff');
+  var FARBE_C = cssFarbe('--accent-c', '#34d8c4');
+
+  // ---------- Zustand ----------
+  var pegel = new Array(PUNKTE);
+  for (var i = 0; i < PUNKTE; i++) pegel[i] = 0;
+
+  var aktuell = 0;        // geglaetteter Momentanpegel
+  var audioCtx = null;
+  var analyser = null;
+  var daten = null;
+  var quelle = null;
+  var spur = null;        // MediaStreamTrack
+  var rafId = null;
+  var letzterTakt = 0;
+  var laeuft = false;
+  var wacht = null;
+
+  function sichtbar() {
+    return !!(wave.offsetParent || wave.getClientRects().length);
+  }
+
+  // ---------- Zeichnen ----------
+  // Halbe Dicke je Stuetzpunkt, raeumlich geglaettet.
+  // Ohne diese Glaettung entstehen durch schnelles Attack /
+  // langsames Release "Haifischflossen" statt runder Wellen.
+  var hoehen = new Array(PUNKTE);
+  var mitten = new Array(PUNKTE);
+
+  // Die Mittellinie ist keine Gerade, sondern eine wandernde Welle aus
+  // zwei ueberlagerten Sinus. Dadurch wirkt das Band wie ein Band aus
+  // Licht, nicht wie ein Balkendiagramm. Der Ausschlag waechst mit dem
+  // Pegel, bleibt bei Stille aber minimal sichtbar.
+  function bahnenBauen(ts) {
+    var m = hoeheCss / 2;
+    var maxDick = Math.max(1.6, (m - 1.5) * DICKE);
+    var maxWelle = (m - 1.5) * WELLE_A;
+    var ph = ts * WELLE_T;
+
+    for (var i = 0; i < PUNKTE; i++) {
+      var a = pegel[i === 0 ? 0 : i - 1];
+      var b = pegel[i];
+      var c = pegel[i === PUNKTE - 1 ? i : i + 1];
+      var mittel = (a + 2 * b + c) / 4;
+
+      var t = i / (PUNKTE - 1);
+      // Enden auslaufen lassen, damit der Strahl wie ein Band wirkt
+      var fenster = Math.pow(Math.sin(Math.PI * t), 0.6);
+
+      hoehen[i] = RUHE + mittel * maxDick * fenster;
+
+      var welle =
+        Math.sin(t * 6.1 - ph * 2.2) * 0.62 +
+        Math.sin(t * 10.4 + ph * 1.5) * 0.38;
+      mitten[i] = m + welle * maxWelle * fenster * (0.22 + mittel * 0.78);
+    }
+  }
+
+  function kante(oben) {
+    var w = breiteCss, n = PUNKTE;
+    var vz = oben ? -1 : 1;
+    var xs = [], ys = [];
+    for (var i = 0; i < n; i++) {
+      var idx = oben ? i : (n - 1 - i);
+      xs.push((idx / (n - 1)) * w);
+      ys.push(mitten[idx] + vz * hoehen[idx]);
+    }
+    ctx.lineTo(xs[0], ys[0]);
+    for (var j = 0; j < n - 1; j++) {
+      var cx = (xs[j] + xs[j + 1]) / 2;
+      var cy = (ys[j] + ys[j + 1]) / 2;
+      ctx.quadraticCurveTo(xs[j], ys[j], cx, cy);
+    }
+    ctx.lineTo(xs[n - 1], ys[n - 1]);
+  }
+
+  function zeichnen(ts) {
+    ctx.clearRect(0, 0, breiteCss, hoeheCss);
+    bahnenBauen(ts);
+
+    var w = breiteCss;
+    // wandernder Verlauf: der Farbblock schiebt sich seitlich durch
+    var off = ((ts * WANDER) % 2) - 1;
+    var g = ctx.createLinearGradient(off * w, 0, (off + 2) * w, 0);
+    g.addColorStop(0.00, FARBE_A);
+    g.addColorStop(0.25, FARBE_C);
+    g.addColorStop(0.50, FARBE_B);
+    g.addColorStop(0.75, FARBE_C);
+    g.addColorStop(1.00, FARBE_A);
+
+    ctx.beginPath();
+    ctx.moveTo(0, mitten[0] - hoehen[0]);
+    kante(true);
+    kante(false);
+    ctx.closePath();
+
+    ctx.shadowColor = FARBE_C;
+    ctx.shadowBlur = 9;
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  function takt(ts) {
+    if (!laeuft) return;
+    rafId = requestAnimationFrame(takt);
+
+    if (!sichtbar()) return;
+    groesseSetzen();
+
+    // Pegel lesen und glaetten
+    var ziel = 0;
+    if (analyser && daten) {
+      analyser.getByteTimeDomainData(daten);
+      var summe = 0;
+      for (var i = 0; i < daten.length; i++) {
+        var v = (daten[i] - 128) / 128;
+        summe += v * v;
+      }
+      ziel = Math.min(1, Math.sqrt(summe / daten.length) * 4.2);
+    }
+    var k = ziel > aktuell ? ATTACK : RELEASE;
+    aktuell += (ziel - aktuell) * k;
+
+    if (!letzterTakt) letzterTakt = ts;
+    if (ts - letzterTakt >= TAKT_MS) {
+      letzterTakt = ts;
+      // leichtes Atmen, damit bei Stille kein toter Strich steht
+      var atem = 0.045 + 0.03 * Math.sin(ts / 380);
+      pegel.push(Math.max(atem, aktuell));
+      pegel.shift();
+    }
+
+    zeichnen(ts);
+  }
+
+  // ---------- Start / Stop ----------
+  function stoppen() {
+    laeuft = false;
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    if (wacht) { clearInterval(wacht); wacht = null; }
+    try { if (quelle) quelle.disconnect(); } catch (e) {}
+    try { if (audioCtx) audioCtx.close(); } catch (e) {}
+    audioCtx = null; analyser = null; daten = null; quelle = null; spur = null;
+    aktuell = 0;
+    for (var i = 0; i < PUNKTE; i++) pegel[i] = 0;
+    try { ctx.clearRect(0, 0, breiteCss, hoeheCss); } catch (e) {}
+    wave.classList.remove('nx-beam');
+  }
+
+  function starten(stream) {
+    try {
+      var spuren = stream.getAudioTracks ? stream.getAudioTracks() : [];
+      if (!spuren.length) return;
+
+      // Ein evtl. noch offener Lauf wird zuerst hart beendet.
+      stoppen();
+
+      spur = spuren[0];
+      audioCtx = new AC();
+      quelle = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.6;
+      quelle.connect(analyser);
+      daten = new Uint8Array(analyser.fftSize);
+
+      wave.classList.add('nx-beam');
+      groesseSetzen();
+
+      laeuft = true;
+      letzterTakt = 0;
+      rafId = requestAnimationFrame(takt);
+
+      // stop() feuert kein "ended" — deshalb zusaetzlich pollen.
+      try { spur.addEventListener('ended', stoppen); } catch (e) {}
+      wacht = setInterval(function () {
+        if (!laeuft) { clearInterval(wacht); wacht = null; return; }
+        if (!spur || spur.readyState === 'ended') stoppen();
+      }, 400);
+    } catch (e) {
+      // Kein AudioContext moeglich (z. B. Autoplay-Policy):
+      // Klasse wieder runter -> die Original-Balken bleiben sichtbar.
+      stoppen();
+    }
+  }
+
+  // ---------- Original-Balken stilllegen ----------
+  // Solange der Strahl laeuft, schreibt der Original-Code sonst weiter
+  // 32 style.height pro Frame in Spans, die niemand sieht. Der
+  // Original-Analyser darf laufen, das kostet fast nichts; nur das
+  // Zeichnen wird uebersprungen.
+  if (typeof window.renderLiveWave === 'function') {
+    var origRender = window.renderLiveWave;
+    window.renderLiveWave = function () {
+      if (wave.classList.contains('nx-beam')) return;
+      return origRender.apply(this, arguments);
+    };
+  }
+
+  // ---------- Am Stream haengen ----------
+  var original = md.getUserMedia.bind(md);
+  md.getUserMedia = function (constraints) {
+    var p = original(constraints);
+    try {
+      if (constraints && constraints.audio) {
+        p.then(function (stream) {
+          try { starten(stream); } catch (e) {}
+          return stream;
+        }, function () {});
+      }
+    } catch (e) {}
+    return p;
+  };
 })();

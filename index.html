@@ -156,7 +156,12 @@
     position: relative;
     z-index: 1;
     transform: translateY(var(--vh-offset, 0px));
-    transition: height .38s var(--ease-out), transform .38s var(--ease-out);
+    /* Frueher lag hier "transition: height .38s". Height ist eine
+       Layout-Eigenschaft — jeder Frame reflowte die komplette Chatliste,
+       und iOS meldet die Tastaturhoehe ohnehin erst am Ende der nativen
+       Animation, sodass die Kurve nie passte. Die Tastatur wird jetzt
+       ueber --kb + transform am Composer gefahren (Compositor, kein
+       Reflow) und pro Frame aus visualViewport nachgezogen. */
     /* will-change: height war hier wirkungslos — eine Layout-Eigenschaft
        laesst sich nicht auf den Compositor auslagern, der Layer kostete
        nur Speicher. */
@@ -349,6 +354,10 @@
     scrollbar-color: rgba(255,255,255,0.12) transparent;
     padding-left: max(16px, env(safe-area-inset-left));
     padding-right: max(16px, env(safe-area-inset-right));
+    /* Platz fuer die Tastatur. Bewusst OHNE transition: der Wert wird
+       einmal zu Beginn gesetzt, damit die letzte Nachricht nicht hinter
+       der Tastatur verschwindet — animiert wird nur der Composer. */
+    padding-bottom: calc(12px + var(--kb, 0px));
   }
 
   .chat::-webkit-scrollbar{ width: 5px; }
@@ -358,6 +367,14 @@
   .row{
     display:flex;
     max-width: 84%;
+    /* Der lange Druck oeffnet unser eigenes Menue. iOS feuert dabei kein
+       "selectstart", weshalb die JS-Bremse in nexus-sync.js wirkungslos
+       war und zusaetzlich die native Auswahl aufzog — sichtbar als blaue
+       Markierung ueber die ganze Seite plus zweitem Systemmenue.
+       Kopieren laeuft ueber den eigenen Knopf im Menue. */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
     animation: materialize .4s var(--ease-out) both;
     /* Jede Bubble bekommt ihren eigenen Layout- und Paint-Bereich.
        Dadurch reflowt beim Tastatur-Oeffnen nicht die ganze Liste neu. */
@@ -554,10 +571,12 @@
     position: relative;
     z-index: 1;
     opacity: 0;
-    transform: translateY(24px);
+    /* Zwei Bewegungen in EINER Deklaration: der einmalige Intro-Versatz
+       (24px, faellt mit .show auf 0) und die Tastatur (--kb). Getrennte
+       Regeln wuerden sich gegenseitig ueberschreiben. */
+    transform: translateY(calc(24px - var(--kb, 0px)));
     /* padding-bottom animierte eine Layout-Eigenschaft und reflowte dabei
-       380 ms lang die komplette Chatliste. Die Hoehen-Transition auf .app
-       macht die Bewegung ohnehin weich. */
+       380 ms lang die komplette Chatliste. */
     transition: opacity .55s var(--ease-out), transform .55s var(--ease-out);
     padding-left: max(16px, env(safe-area-inset-left));
     padding-right: max(16px, env(safe-area-inset-right));
@@ -565,7 +584,14 @@
 
   .composer-wrap.show{
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(calc(var(--kb, 0px) * -1));
+  }
+
+  /* Waehrend die Tastatur faehrt, wird --kb pro Frame gemessen. Eine
+     transform-Transition wuerde dabei nur hinterherlaufen und genau das
+     Nachrucken erzeugen, das behoben werden soll. */
+  .app.kb-aktiv .composer-wrap{
+    transition: opacity .55s var(--ease-out);
   }
 
   .app.kb-open .composer-wrap{
@@ -1073,35 +1099,99 @@
   // automatisch). Deshalb wird die tatsächlich sichtbare Höhe über
   // visualViewport gemessen und als --vh gesetzt, sodass die
   // Eingabeleiste beim Öffnen der Tastatur mit hochrutscht.
-  let vhRafId = null;
-  let lastVH = 0;
-  function setVH(){
-    if (vhRafId) cancelAnimationFrame(vhRafId);
-    vhRafId = requestAnimationFrame(() => {
-      const vv = window.visualViewport;
-      const h = (vv ? vv.height : window.innerHeight);
-      const offsetTop = vv ? vv.offsetTop : 0;
-      // Nur bei einer echten Höhenänderung (z.B. Tastatur) reagieren —
-      // winzige Verschiebungen beim Tippen (visualViewport "scroll")
-      // sollen die App-Höhe nicht antriggern, sonst "wandert" alles.
-      if (Math.abs(h - lastVH) < 2) return;
-      lastVH = h;
-      // Sofort setzen (nicht künstlich verzögern) — die CSS-Transition
-      // sorgt für die Weichheit. Eine Verzögerung hier ließ das Schließen
-      // spät und ruckartig wirken, während das Öffnen zufällig glatt lief.
-      document.documentElement.style.setProperty('--vh', (h * 0.01) + 'px');
-      // Gleicht aus, dass Safari beim Tastatur-Öffnen den sichtbaren
-      // Bereich (visualViewport) leicht nach oben verschiebt, während
-      // wir das Seiten-Scrollen auf 0 fixieren — sonst bleibt unten,
-      // zwischen Composer und Tastatur, eine Lücke stehen.
-      document.documentElement.style.setProperty('--vh-offset', offsetTop + 'px');
-    });
+  //
+  // Zwei getrennte Größen:
+  //   --vh  = Höhe des Fensters OHNE Tastatur. Ändert sich praktisch nur
+  //           bei Drehung. Damit reflowt die App beim Tippen nie.
+  //   --kb  = aktuelle Höhe der Tastatur. Verschiebt nur den Composer
+  //           per transform — reine Compositor-Arbeit, kein Layout.
+  //
+  // Früher wurde die App-Höhe selbst animiert. Height ist eine
+  // Layout-Eigenschaft: jeder Frame reflowte die gesamte Chatliste.
+  // Zusätzlich meldet iOS visualViewport erst NACH der nativen
+  // Tastatur-Animation — die CSS-Transition riet die Apple-Kurve nach
+  // und lag immer daneben. Deshalb wird während des Öffnens und
+  // Schließens pro Frame gemessen statt geraten.
+  const docEl = document.documentElement;
+  let basisHoehe = 0;
+  let letzteKb = -1;
+  let letzterOffset = -1;
+  let kbLoopId = 0;
+  let kbLoopBis = 0;
+
+  function fensterHoehe(){
+    const vv = window.visualViewport;
+    return vv ? vv.height : window.innerHeight;
   }
-  setVH();
-  window.addEventListener('resize', setVH);
-  window.addEventListener('orientationchange', setVH);
+
+  function basisSetzen(){
+    const h = Math.max(fensterHoehe(), window.innerHeight || 0);
+    if (Math.abs(h - basisHoehe) < 2) return;
+    basisHoehe = h;
+    docEl.style.setProperty('--vh', (h * 0.01) + 'px');
+  }
+
+  // Einmal messen und schreiben. Bewusst nur bei echter Änderung, damit
+  // wir nicht jeden Frame unnötig Style invalidieren.
+  function kbMessen(){
+    const vv = window.visualViewport;
+    const h = fensterHoehe();
+    const offsetTop = vv ? vv.offsetTop : 0;
+    // Tastaturhöhe = wie viel vom Fenster gerade verdeckt ist.
+    let kb = Math.max(0, Math.round(basisHoehe - h - offsetTop));
+    // Unter ~80 px ist es keine Tastatur, sondern die Adressleiste.
+    if (kb < 80) kb = 0;
+    if (kb !== letzteKb){
+      letzteKb = kb;
+      docEl.style.setProperty('--kb', kb + 'px');
+    }
+    const off = Math.round(offsetTop);
+    if (off !== letzterOffset){
+      letzterOffset = off;
+      docEl.style.setProperty('--vh-offset', off + 'px');
+    }
+    return kb;
+  }
+
+  // Während die native Tastatur fährt, jeden Frame nachziehen. iOS gibt
+  // uns kein Fortschritts-Event, also messen wir selbst — rund 600 ms,
+  // das deckt Öffnen wie Schließen ab.
+  function kbVerfolgen(dauerMs){
+    kbLoopBis = Math.max(kbLoopBis, performance.now() + (dauerMs || 600));
+    if (kbLoopId) return;
+    const schritt = () => {
+      kbMessen();
+      if (performance.now() < kbLoopBis){
+        kbLoopId = requestAnimationFrame(schritt);
+      } else {
+        kbLoopId = 0;
+        kbMessen();
+      }
+    };
+    kbLoopId = requestAnimationFrame(schritt);
+  }
+
+  function setVH(){
+    basisSetzen();
+    kbMessen();
+  }
+
+  basisSetzen();
+  kbMessen();
+
+  window.addEventListener('orientationchange', () => {
+    // Nach dem Drehen ist die Basishöhe eine andere — neu einmessen.
+    basisHoehe = 0;
+    setTimeout(() => { basisSetzen(); kbMessen(); }, 250);
+  });
+  window.addEventListener('resize', () => {
+    // Ohne offene Tastatur darf die Basishöhe nachgeführt werden.
+    if (letzteKb === 0) basisSetzen();
+    kbVerfolgen(300);
+  });
   if (window.visualViewport){
-    window.visualViewport.addEventListener('resize', setVH);
+    window.visualViewport.addEventListener('resize', () => kbVerfolgen(400));
+    window.visualViewport.addEventListener('scroll', () => kbMessen());
   }
 
   // ── Konfiguration ─────────────────────────────────────────
@@ -1519,24 +1609,46 @@
     }
   }, { passive: false });
 
+  // Früher standen hier 13 setTimeout-Aufrufe, die während der
+  // Tastatur-Animation Layout und Scrollposition erzwangen — genau das
+  // hat geruckelt. Jetzt läuft während der Bewegung eine einzige
+  // rAF-Schleife, die misst, den Composer nachzieht und das Seiten-
+  // Scrollen bei 0 hält.
+  let kbScrollLoop = 0;
+  let kbScrollBis = 0;
+  function kbBegleiten(dauerMs){
+    kbVerfolgen(dauerMs);
+    // Solange wir pro Frame messen, darf keine CSS-Transition auf dem
+    // transform liegen — sonst laeuft sie der Messung hinterher.
+    appEl.classList.add('kb-aktiv');
+    kbScrollBis = Math.max(kbScrollBis, performance.now() + (dauerMs || 600));
+    if (kbScrollLoop) return;
+    const schritt = () => {
+      lockScrollTop();
+      if (performance.now() < kbScrollBis){
+        kbScrollLoop = requestAnimationFrame(schritt);
+      } else {
+        kbScrollLoop = 0;
+        lockScrollTop();
+        appEl.classList.remove('kb-aktiv');
+      }
+    };
+    kbScrollLoop = requestAnimationFrame(schritt);
+  }
+
   notesEl.addEventListener('focus', () => {
     appEl.classList.add('kb-open');
-    lockScrollTop();
-    requestAnimationFrame(lockScrollTop);
-    [0, 30, 60, 100, 150, 250, 400, 600].forEach(delay => setTimeout(lockScrollTop, delay));
-    // Letzte Nachricht sichtbar halten: sobald die Tastatur hochfährt und
-    // der Chatbereich dadurch kleiner wird, ans Ende scrollen, damit die
-    // zuletzt gesendete/empfangene Nachricht nicht hinter der Tastatur
-    // verschwindet, sondern klar lesbar über dem Eingabefeld bleibt.
-    [0, 60, 150, 250, 400].forEach(delay => setTimeout(scrollToBottom, delay));
+    kbBegleiten(700);
+    // Letzte Nachricht sichtbar halten: der Chat bekommt unten Platz in
+    // Höhe der Tastatur, also einmal ans Ende scrollen, sobald der
+    // Platz steht. Zweimal reicht — Anfang und Ende der Bewegung.
+    requestAnimationFrame(scrollToBottom);
+    setTimeout(scrollToBottom, 420);
   });
 
   notesEl.addEventListener('blur', () => {
     appEl.classList.remove('kb-open');
-    // Beim Schließen der Tastatur mehrfach synchronisieren, damit die
-    // Composer-Position genauso flüssig der nativen Tastatur-Animation
-    // folgt wie beim Öffnen (statt am Ende ruckartig nachzuspringen).
-    [0, 16, 32, 60, 100, 160, 250, 400].forEach(delay => setTimeout(setVH, delay));
+    kbBegleiten(700);
   });
 
   // ── Tastatur schließen bei Tap in den Chatverlauf ───────────
@@ -2200,6 +2312,9 @@
     formData.append('session_id', SESSION_ID);
     formData.append('timestamp', new Date().toISOString());
     formData.append('notes', text);
+    // Kundencode mitschicken, damit Fehlermeldungen nur an das
+    // verursachende Geraet gehen (Push-Zuordnung in Make).
+    formData.append('kunde_code', (typeof window.getKundenCode === 'function' ? (window.getKundenCode() || '') : ''));
     if (audioBlob){
       const mime = audioBlob.type || 'audio/webm';
       const ext = mime.includes('mp4') ? 'mp4' : 'webm';

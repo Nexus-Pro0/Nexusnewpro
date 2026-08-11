@@ -453,15 +453,23 @@
       /* Auf Touch-Geraeten schluckt der lange Druck die native Auswahl,
          damit stattdessen unser Menue aufgeht. Am Laptop bleibt das
          normale Markieren erhalten, dort geht das Menue per Rechtsklick. */
+      /* Nur .chat zu sperren hat nicht gereicht: WebKit sucht sich dann
+         den naechsten auswaehlbaren Vorfahren und markiert dessen ganzen
+         Textbereich — genau das gemeldete "markiert die komplette Seite".
+         Deshalb wird auf Touch alles gesperrt und nur das Eingabefeld
+         wieder freigegeben (dort braucht der Cursor die Auswahl). */
       '@media (hover:none){',
-      '  .chat, .chat *{-webkit-touch-callout:none!important;-webkit-user-select:none!important;',
-      '    -moz-user-select:none!important;-ms-user-select:none!important;user-select:none!important;}',
+      '  html, body, .app, .chat, .chat *{-webkit-touch-callout:none!important;',
+      '    -webkit-user-select:none!important;-moz-user-select:none!important;',
+      '    -ms-user-select:none!important;user-select:none!important;}',
+      '  #notes{-webkit-user-select:text!important;user-select:text!important;',
+      '    -webkit-touch-callout:default!important;}',
       '}',
-      /* Der Container aendert seine Hoehe beim Tastatur-Oeffnen per
-         Transition. Kuerzer und mit flacherer Kurve liegt sie deutlich
-         naeher an der nativen Tastatur-Animation. */
-      '.app{transition:height .28s cubic-bezier(.22,.61,.36,1),',
-      '  transform .28s cubic-bezier(.22,.61,.36,1)!important;}',
+      /* Hier stand eine !important-Transition auf .app{height}. Sie hat
+         die Aenderung in index.html ueberschrieben und war der eigentliche
+         Grund fuer das Ruckeln: height ist eine Layout-Eigenschaft, jeder
+         Frame reflowte die komplette Chatliste. Die Tastatur laeuft jetzt
+         ueber --kb am Composer (transform, kein Reflow). */
       '.chat{scroll-behavior:auto!important;-webkit-overflow-scrolling:touch;',
       '  overscroll-behavior:contain;}',
       /* Beim Neuaufbau sollen nicht alle Zeilen gleichzeitig einfliegen —
@@ -808,23 +816,16 @@
       }, LONGPRESS_MS);
     }, { passive: true });
 
-    // Auf dem Handy startete der lange Druck zusaetzlich die native
-    // Textauswahl — dann lag ueber dem Menue eine blaue Markierung, die
-    // sich beim Ziehen ueber die ganze Seite ausbreitete. Das Ereignis
-    // wird hier abgefangen, bevor der Browser die Auswahl aufzieht.
-    var touchAktiv = false;
-    chatEl.addEventListener('touchstart', function () { touchAktiv = true; }, { passive: true });
+    // Frueher stand hier eine "selectstart"-Bremse gegen die native
+    // Textauswahl. iOS Safari feuert dieses Ereignis beim langen Druck
+    // gar nicht — die Bremse war wirkungslos, und es lagen zwei Menues
+    // uebereinander plus eine blaue Markierung ueber der ganzen Seite.
+    // Unterbunden wird das jetzt in CSS (-webkit-touch-callout und
+    // user-select auf #chat .row). Hier bleibt nur das Aufraeumen einer
+    // eventuell doch entstandenen Auswahl.
     chatEl.addEventListener('touchend', function () {
-      touchAktiv = false;
       setTimeout(auswahlWeg, 0);
     }, { passive: true });
-    chatEl.addEventListener('touchcancel', function () { touchAktiv = false; }, { passive: true });
-
-    document.addEventListener('selectstart', function (ev) {
-      if (!touchAktiv && !menuOffen) return;
-      var t = ev.target;
-      if (t && t.closest && (t.closest('#chat') || t.closest('.nx-menu'))) ev.preventDefault();
-    });
 
     chatEl.addEventListener('touchmove', function (ev) {
       if (!druckTimer) return;

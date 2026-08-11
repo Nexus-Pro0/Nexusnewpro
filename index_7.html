@@ -1,0 +1,2462 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Nexus Pro</title>
+<meta name="color-scheme" content="dark">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+
+<!-- ── Home-Bildschirm-Icon & "Wie eine App" (iOS/Android) ─────────── -->
+<!-- iOS: Icon fürs Hinzufügen zum Home-Bildschirm -->
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-180.png">
+<link rel="apple-touch-icon" sizes="152x152" href="apple-touch-icon-152.png">
+<link rel="apple-touch-icon" sizes="167x167" href="apple-touch-icon-167.png">
+<link rel="apple-touch-icon" sizes="120x120" href="apple-touch-icon-120.png">
+<!-- iOS: im Vollbild wie eine echte App starten (ohne Safari-Leiste) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Nexus Pro">
+<!-- Browser-Tab-Icon (Favicon) -->
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<!-- Android/Chrome: "Zum Startbildschirm hinzufügen" -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#080b16">
+<!-- ─────────────────────────────────────────────────────────────── -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Schriften blockierten bisher das erste Bild: der Browser wartete auf
+     Googles Antwort, bevor er irgendetwas zeichnete. Jetzt wird das
+     Stylesheet nebenher geladen und erst beim Eintreffen aktiv. -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" media="print" onload="this.media='all';this.onload=null">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap"></noscript>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg-0:#080b16;
+    --bg-1:#0c1226;
+    --bg-2:#121a36;
+    --surface:#141d3b;
+    --surface-2:#182247;
+    --bubble-in:#161f40;
+    --bubble-out-a:#5b6ef5;
+    --bubble-out-b:#8c5cff;
+    --border:#242e56;
+    --accent-a:#5b6ef5;
+    --accent-b:#8c5cff;
+    --accent-c:#34d8c4;
+    --text:#e9edfb;
+    --text-muted:#8c96b8;
+    --danger:#ff5c72;
+
+    /* Bewegungs-Tokens: eine einheitliche Kurve statt gemischtem "ease".
+       "ease" ist die Browser-Standardkurve und wirkt genau deshalb billig. */
+    --ease-out: cubic-bezier(.16,1,.3,1);
+    --ease-std: cubic-bezier(.32,.72,0,1);
+    --dur-fast: 140ms;
+    --dur-mid: 260ms;
+    --dur-slow: 520ms;
+
+    /* Radien-System */
+    --r-xs: 12px;
+    --r-sm: 14px;
+    --r-md: 18px;
+    --r-lg: 28px;
+    --r-tail: 6px;
+    --r-full: 999px;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+
+  html,body{
+    margin:0; padding:0;
+    height: 100%;
+    height: 100dvh;
+    min-height: 100%;
+    min-height: 100dvh;
+    background: linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 45%, var(--bg-2) 100%);
+    background-color: var(--bg-0);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .ambient{
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    background: linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 45%, var(--bg-2) 100%);
+  }
+
+  .ambient::after{
+    content:"";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 38%, rgba(91,110,245,0.28), transparent 62%);
+    opacity: 0;
+    transition: opacity .7s var(--ease-out);
+  }
+
+  .ambient.pulse::after{ opacity: 1; }
+
+  .starfield{
+    position: absolute;
+    inset: 0;
+  }
+
+  /* Der Puls lief frueher als filter: brightness() ueber das gesamte
+     Sternenfeld — das ist der teuerste Paint der Datei. Jetzt uebernimmt
+     eine zweite, reine Opacity-Ebene den Effekt. */
+  .ambient::before{
+    content:"";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 42%, rgba(140,92,255,0.16), transparent 58%);
+    opacity: 0;
+    transition: opacity .7s var(--ease-out);
+  }
+
+  .ambient.pulse::before{ opacity: 1; }
+
+  .star{
+    position: absolute;
+    border-radius: 50%;
+    animation: drift-star var(--dur) ease-in-out infinite alternate, twinkle-star var(--tw) ease-in-out infinite;
+  }
+
+  /* Im Hintergrund kostet der Sternenhimmel sonst weiter Rechenzeit. */
+  .starfield.paused .star{ animation-play-state: paused; }
+
+  @keyframes drift-star{
+    from{ transform: translate(0, 0); }
+    to{ transform: translate(var(--dx), var(--dy)); }
+  }
+
+  @keyframes twinkle-star{
+    0%, 100%{ opacity: var(--op-min); }
+    50%{ opacity: var(--op-max); }
+  }
+
+  .app{
+    height: 100vh;
+    height: 100dvh;
+    height: calc(var(--vh, 1vh) * 100);
+    display:flex;
+    flex-direction:column;
+    max-width: 560px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+    transform: translateY(var(--vh-offset, 0px));
+    /* Frueher lag hier "transition: height .38s". Height ist eine
+       Layout-Eigenschaft — jeder Frame reflowte die komplette Chatliste,
+       und iOS meldet die Tastaturhoehe ohnehin erst am Ende der nativen
+       Animation, sodass die Kurve nie passte. Die Tastatur wird jetzt
+       ueber --kb + transform am Composer gefahren (Compositor, kein
+       Reflow) und pro Frame aus visualViewport nachgezogen. */
+    /* will-change: height war hier wirkungslos — eine Layout-Eigenschaft
+       laesst sich nicht auf den Compositor auslagern, der Layer kostete
+       nur Speicher. */
+    contain: layout;
+  }
+
+  .watermark{
+    position:absolute;
+    inset: 0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity .5s var(--ease-out);
+  }
+
+  .watermark.show{ opacity: 1; }
+
+  .watermark span{
+    font-family:'Sora', sans-serif;
+    font-weight: 700;
+    font-size: 34px;
+    letter-spacing: 0.14em;
+    line-height: 1;
+    color: transparent;
+    background: linear-gradient(135deg, rgba(91,110,245,0.16), rgba(140,92,255,0.13) 50%, rgba(52,216,196,0.12));
+    -webkit-background-clip: text;
+    background-clip: text;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  @media (max-width: 420px){
+    .watermark span{ font-size: 24px; }
+  }
+
+  /* ── Header ───────────────────────────────── */
+  .header{
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding: 18px 20px;
+    padding-top: max(18px, env(safe-area-inset-top));
+    padding-left: max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
+    position: relative;
+    z-index: 1;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity .6s var(--ease-out), transform .6s cubic-bezier(.2,.8,.2,1);
+  }
+
+  .header.show{
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .notif-btn{
+    margin-left: auto;
+    position: relative;
+    width: 38px; height:38px;
+    border-radius: 12px;
+    border: none;
+    background: var(--surface);
+    color: var(--text-muted);
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+    cursor: pointer;
+    transition: background .15s var(--ease-out), color .15s var(--ease-out);
+  }
+
+  .notif-btn:active{ transform: scale(0.94); }
+
+  .notif-btn.granted{
+    color: var(--accent-c);
+    background: rgba(52,216,196,0.12);
+  }
+
+  .notif-btn svg{ width:19px; height:19px; }
+
+  .notif-dot{
+    position: absolute;
+    top: 6px; right: 7px;
+    width: 7px; height:7px;
+    border-radius: 50%;
+    background: var(--danger);
+    display: none;
+  }
+
+  .notif-btn.needs-attention .notif-dot{ display: block; }
+
+  .logo-mark{
+    width:34px; height:34px;
+    border-radius: var(--r-xs);
+    background: #0c1226;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+    position: relative;
+  }
+
+  /* Frueher ein animierter box-shadow — der zwingt den Browser in jedem
+     Frame zum Neuzeichnen des Blurs. Jetzt liegt der Schein als fertiger
+     Verlauf darunter und nur opacity/scale animieren (reiner Compositor). */
+  .logo-mark::before{
+    content:"";
+    position: absolute;
+    left: 50%; top: 58%;
+    width: 190%; height: 190%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(140,92,255,0.55) 0%, rgba(91,110,245,0.28) 42%, transparent 68%);
+    opacity: .55;
+    pointer-events: none;
+    z-index: -1;
+    animation: breathe-glow 4.5s ease-in-out infinite;
+  }
+
+  @keyframes breathe-glow{
+    0%, 100%{ opacity: .45; transform: translate(-50%, -50%) scale(0.92); }
+    50%{ opacity: .9; transform: translate(-50%, -50%) scale(1.08); }
+  }
+
+  .logo-mark svg{ width:100%; height:100%; display:block; }
+
+  .core-glow{
+    animation: core-glow-pulse 4.5s ease-in-out infinite;
+    transform-origin: 80px 80px;
+  }
+  @keyframes core-glow-pulse{
+    0%, 100%{ opacity: 0.6; transform: scale(1); }
+    50%{ opacity: 1; transform: scale(1.15); }
+  }
+
+  .brand{
+    font-family:'Sora', sans-serif;
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: 0.01em;
+  }
+
+  .brand-pro{
+    font-family:'Sora', sans-serif;
+    font-size: 0.5em;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    vertical-align: super;
+    margin-left: 3px;
+    background: linear-gradient(90deg, var(--accent-c), var(--accent-b));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .status-line{
+    font-size: 12px;
+    color: var(--text-muted);
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin-top:1px;
+  }
+
+  .status-line .dot{
+    width:6px; height:6px;
+    border-radius:50%;
+    background: var(--accent-c);
+    box-shadow: 0 0 6px 1px rgba(52,216,196,0.7);
+  }
+
+  /* ── Chat area ────────────────────────────── */
+  .chat{
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 16px 12px;
+    display:flex;
+    flex-direction:column;
+    gap: 14px;
+    position: relative;
+    z-index: 1;
+    /* scroll-behavior: smooth stand hier global und hat sich mit dem
+       eigenen Scroll-Kleben gebissen — daher das Haken-und-Springen.
+       Weiches Scrollen wird jetzt gezielt im Code ausgeloest. */
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.12) transparent;
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    /* Platz fuer die Tastatur. Bewusst OHNE transition: der Wert wird
+       einmal zu Beginn gesetzt, damit die letzte Nachricht nicht hinter
+       der Tastatur verschwindet — animiert wird nur der Composer. */
+    padding-bottom: calc(12px + var(--kb, 0px));
+  }
+
+  .chat::-webkit-scrollbar{ width: 5px; }
+  .chat::-webkit-scrollbar-track{ background: transparent; }
+  .chat::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.08); border-radius: 4px; }
+
+  .row{
+    display:flex;
+    max-width: 84%;
+    /* Der lange Druck oeffnet unser eigenes Menue. iOS feuert dabei kein
+       "selectstart", weshalb die JS-Bremse in nexus-sync.js wirkungslos
+       war und zusaetzlich die native Auswahl aufzog — sichtbar als blaue
+       Markierung ueber die ganze Seite plus zweitem Systemmenue.
+       Kopieren laeuft ueber den eigenen Knopf im Menue. */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    animation: materialize .4s var(--ease-out) both;
+    /* Jede Bubble bekommt ihren eigenen Layout- und Paint-Bereich.
+       Dadurch reflowt beim Tastatur-Oeffnen nicht die ganze Liste neu. */
+    contain: content;
+  }
+
+  @keyframes materialize{
+    0%{ opacity: 0; transform: translateY(14px) scale(0.94); }
+    60%{ opacity: 1; }
+    100%{ opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .row.out{ align-self:flex-end; justify-content:flex-end; }
+  .row.in{ align-self:flex-start; justify-content:flex-start; }
+
+  .bubble{
+    padding: 12px 16px;
+    border-radius: 18px;
+    font-size: 15px;
+    line-height: 1.5;
+    word-wrap:break-word;
+    white-space: pre-wrap;
+  }
+
+  .row.out .bubble{
+    background: linear-gradient(135deg, var(--bubble-out-a), var(--bubble-out-b));
+    color: #fff;
+    border-bottom-right-radius: 6px;
+  }
+
+  .row.in .bubble{
+    background: var(--bubble-in);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-bottom-left-radius: 6px;
+  }
+
+  .bubble.audio-bubble{
+    padding: 10px 14px;
+  }
+
+  .voice-player{
+    display:flex;
+    align-items:center;
+    gap:11px;
+    min-width: 190px;
+  }
+
+  .voice-play-btn{
+    flex-shrink:0;
+    width: 34px; height:34px;
+    border-radius:50%;
+    border:none;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background: rgba(255,255,255,0.18);
+    color:#fff;
+    box-shadow: 0 2px 8px -2px rgba(0,0,0,0.35);
+    transition: background .15s var(--ease-out), transform .15s cubic-bezier(.2,.8,.2,1), box-shadow .15s var(--ease-out);
+  }
+
+  .voice-play-btn:hover{ background: rgba(255,255,255,0.28); }
+  .voice-play-btn:active{ transform: scale(0.9); }
+  .voice-play-btn svg{ width:13px; height:13px; }
+
+  .row.in .voice-play-btn{
+    background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+    box-shadow: 0 3px 10px -3px rgba(91,110,245,0.55);
+  }
+
+  .voice-wave{
+    flex:1;
+    display:flex;
+    align-items:center;
+    gap:2.5px;
+    height: 28px;
+    cursor:pointer;
+  }
+
+  .voice-wave span{
+    flex:1;
+    min-width: 2.5px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.32);
+    transition: background .25s var(--ease-out), transform .2s var(--ease-out);
+    transform-origin: center;
+  }
+
+  .voice-wave:hover span{ transform: scaleY(1.08); }
+
+  .row.in .voice-wave span{ background: rgba(255,255,255,0.14); }
+  .row.in .voice-wave span.played{ background: linear-gradient(180deg, var(--accent-c), var(--accent-a)); }
+  .row.out .voice-wave span.played{ background: #ffffff; }
+
+  .voice-duration{
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.85;
+    flex-shrink:0;
+    min-width: 32px;
+    text-align:right;
+    letter-spacing: 0.2px;
+  }
+
+  .meta{
+    display:flex;
+    align-items:center;
+    gap:5px;
+    margin-top: 4px;
+    padding: 0 4px;
+  }
+
+  .row.out .meta{ justify-content:flex-end; }
+
+  .timestamp{
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .ticks{
+    display:flex;
+    align-items:center;
+    color: var(--text-muted);
+    line-height:0;
+    transition: color .25s var(--ease-out);
+  }
+
+  .ticks .check-2{
+    opacity: 0;
+    transition: opacity .25s var(--ease-out);
+  }
+
+  .ticks.confirmed{ color: var(--accent-c); }
+  .ticks.confirmed .check-2{ opacity: 1; }
+
+  .typing{
+    display:flex;
+    gap:4px;
+    padding: 14px 16px;
+  }
+
+  .typing span{
+    width:6px; height:6px;
+    border-radius:50%;
+    background: var(--text-muted);
+    animation: bounce 1.2s infinite ease-in-out;
+  }
+
+  .typing span:nth-child(2){ animation-delay: .15s; }
+  .typing span:nth-child(3){ animation-delay: .3s; }
+
+  @keyframes bounce{
+    0%, 60%, 100%{ transform: translateY(0); opacity:.5; }
+    30%{ transform: translateY(-4px); opacity:1; }
+  }
+
+  .empty-state{
+    margin: auto;
+    text-align:center;
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 40px 20px;
+    line-height: 1.6;
+    opacity: 0;
+    transform: scale(0.92);
+    transition: opacity .65s var(--ease-out), transform .65s cubic-bezier(.2,.8,.2,1);
+  }
+
+  .empty-state.show{
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .empty-state .logo-mark{
+    margin: 0 auto 16px;
+    width: 48px; height:48px;
+    border-radius: 14px;
+  }
+
+  .empty-state strong{
+    display:block;
+    color: var(--text);
+    font-family: 'Sora', sans-serif;
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+
+  /* ── Composer ─────────────────────────────── */
+  .composer-wrap{
+    flex-shrink:0;
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+    position: relative;
+    z-index: 1;
+    opacity: 0;
+    /* Zwei Bewegungen in EINER Deklaration: der einmalige Intro-Versatz
+       (24px, faellt mit .show auf 0) und die Tastatur (--kb). Getrennte
+       Regeln wuerden sich gegenseitig ueberschreiben. */
+    transform: translateY(calc(24px - var(--kb, 0px)));
+    /* padding-bottom animierte eine Layout-Eigenschaft und reflowte dabei
+       380 ms lang die komplette Chatliste. */
+    transition: opacity .55s var(--ease-out), transform .55s var(--ease-out);
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    /* Auf den Compositor auslagern, damit die Tastatur-Transition unten
+       keine Layer-Beforderung mehr live waehrend der Bewegung ausloest. */
+    will-change: transform;
+  }
+
+  .composer-wrap.show{
+    opacity: 1;
+    transform: translateY(calc(var(--kb, 0px) * -1));
+  }
+
+  /* Waehrend die Tastatur faehrt, aendert sich --kb NICHT kontinuierlich,
+     sondern in wenigen groben Spruengen (iOS liefert visualViewport so).
+     Vorher lief hier gar keine transform-Transition, jeder Sprung wurde
+     also 1:1 durchgereicht -- das war das sichtbare Ruckeln.
+     Jetzt federt eine kurze Transition mit der iOS-eigenen Tastatur-Kurve
+     genau diese Spruenge ab. Kommt waehrend der laufenden Transition ein
+     weiterer Sprung, retargetet der Browser nahtlos von der aktuellen
+     Zwischenposition aus -- kein Zuruecksetzen, kein zweiter Ruckler. */
+  .app.kb-aktiv .composer-wrap{
+    transition: opacity .55s var(--ease-out),
+                transform .25s cubic-bezier(.38,.7,.125,1);
+  }
+
+  .app.kb-open .composer-wrap{
+    padding-bottom: 6px;
+  }
+
+  /* Bewusst gestaltete Übergangszone zur Tastatur hin — im Marken-Look
+     (statt neutralem Grau), nur sichtbar solange die Tastatur offen ist. */
+  .composer-wrap::after{
+    content:"";
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 26px;
+    background: linear-gradient(180deg, transparent 0%, rgba(20,29,59,0.85) 70%, rgba(18,26,54,0.95) 100%);
+    opacity: 0;
+    transition: opacity .38s var(--ease-out);
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .app.kb-open .composer-wrap::after{
+    opacity: 1;
+  }
+
+  .attachment-chip{
+    display:none;
+    align-items:center;
+    gap:10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 8px 10px 8px 14px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .attachment-chip.show{ display:flex; }
+
+  .attachment-chip .voice-play-btn{
+    background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+  }
+
+  .attachment-chip .voice-wave span{ background: rgba(255,255,255,0.14); }
+  .attachment-chip .voice-wave span.played{ background: var(--accent-c); }
+  .attachment-chip .voice-duration{ color: var(--text-muted); }
+
+  .chip-remove{
+    width: 24px; height:24px;
+    border-radius:50%;
+    border:none;
+    background: rgba(255,92,114,0.12);
+    color: var(--danger);
+    font-size: 14px;
+    line-height:1;
+    cursor:pointer;
+    flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .composer{
+    display:flex;
+    align-items:flex-end;
+    gap:6px;
+    position: relative;
+    border-radius: 28px;
+    padding: 7px 7px 7px 20px;
+    background: rgba(20,29,59,0.94);
+    border: 1px solid var(--border);
+    box-shadow: 0 12px 40px -16px rgba(91,110,245,0.35), 0 0 0 1px rgba(255,255,255,0.02) inset;
+    transition: box-shadow .25s var(--ease-out), border-color .25s var(--ease-out);
+  }
+
+  /* Der Blur lag ueber dem animierten Sternenfeld und musste deshalb bei
+     JEDEM Sternen-Frame neu berechnet werden. Auf Zeigergeraeten (Desktop)
+     bleibt er, auf dem Handy uebernimmt eine leicht deckendere Flaeche. */
+  @media (hover: hover) and (pointer: fine){
+    .composer{
+      background: rgba(20,29,59,0.7);
+      backdrop-filter: blur(18px);
+    }
+  }
+
+  .composer:focus-within{
+    border-color: rgba(91,110,245,0.55);
+    box-shadow:
+      0 14px 44px -14px rgba(91,110,245,0.6),
+      0 0 0 3px rgba(91,110,245,0.16),
+      0 0 0 1px rgba(255,255,255,0.03) inset;
+  }
+
+  .notes-wrap{
+    position: relative;
+    flex: 1;
+    display:flex;
+    align-items:center;
+    min-width: 0;
+  }
+
+  #notes{
+    width: 100%;
+    resize:none;
+    border:none;
+    outline:none;
+    background:transparent;
+    color: var(--text);
+    font-family:'Inter', sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    max-height: 120px;
+    padding: 9px 0;
+    caret-color: var(--accent-a);
+  }
+
+  #notes::placeholder{ color: #7683ad; }
+
+  .notes-wrap.recording #notes{ display:none; }
+
+  .record-live{
+    display:none;
+    align-items:center;
+    gap:10px;
+    width: 100%;
+    padding: 9px 2px;
+  }
+
+  .notes-wrap.recording .record-live{ display:flex; }
+
+  .rec-dot{
+    flex-shrink:0;
+    width:8px; height:8px;
+    border-radius:50%;
+    background: var(--danger);
+    animation: blink 1s step-start infinite;
+  }
+
+  .rec-time{
+    flex-shrink:0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rec-wave{
+    flex:1;
+    display:flex;
+    align-items:center;
+    gap:2px;
+    height: 24px;
+    overflow:hidden;
+    min-width:0;
+  }
+
+  .rec-wave span{
+    flex: 0 0 auto;
+    width: 3px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, var(--accent-c), var(--accent-a));
+    height: 4px;
+  }
+
+  .icon-btn{
+    flex-shrink:0;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    border: none;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background: transparent;
+    color: var(--text-muted);
+    position: relative;
+    transition: background .15s var(--ease-out), color .15s var(--ease-out), transform .15s var(--ease-out);
+  }
+
+  .icon-btn:hover{ background: rgba(255,255,255,0.05); color: var(--text); }
+  .icon-btn:active{ transform: scale(0.92); }
+
+  .icon-btn.mic.recording{
+    color: #fff;
+    background: linear-gradient(135deg, var(--danger), #ff8a5c);
+  }
+
+  .icon-btn.mic .ring{
+    position:absolute;
+    inset:-5px;
+    border-radius:50%;
+    border: 2px solid rgba(255,92,114,0.55);
+    opacity:0;
+  }
+
+  .icon-btn.mic.recording .ring{
+    opacity:1;
+    animation: pulse-ring 1.5s ease-out infinite;
+  }
+
+  @keyframes pulse-ring{
+    0%{ transform: scale(0.85); opacity:.7; }
+    70%{ transform: scale(1.5); opacity:0; }
+    100%{ transform: scale(1.5); opacity:0; }
+  }
+
+  .icon-btn svg{ width:19px; height:19px; }
+
+  .icon-btn.cancel-rec{
+    display:none;
+    color: var(--danger);
+  }
+
+  .icon-btn.cancel-rec.show{ display:flex; }
+
+  .icon-btn.cancel-rec:hover{ background: rgba(255,92,114,0.1); }
+
+  @keyframes blink{ 50%{ opacity:0; } }
+
+  .send-btn{
+    flex-shrink:0;
+    width: 40px; height:40px;
+    border-radius: 50%;
+    border:none;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+    color:#fff;
+    box-shadow: 0 6px 16px -6px rgba(91,110,245,0.6);
+    transition: transform .15s var(--ease-out), opacity .15s var(--ease-out);
+  }
+
+  .send-btn:hover{ transform: translateY(-1px); }
+  .send-btn:disabled{ opacity:0.4; cursor:not-allowed; transform:none; }
+
+  .send-btn svg{ width:17px; height:17px; margin-left:1px; }
+
+  .spinner{
+    width:16px; height:16px;
+    border-radius:50%;
+    border: 2px solid rgba(255,255,255,0.35);
+    border-top-color: #fff;
+    animation: spin .7s linear infinite;
+  }
+
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  .error-banner{
+    display:none;
+    align-items:center;
+    gap:8px;
+    background: rgba(255,92,114,0.1);
+    border: 1px solid rgba(255,92,114,0.3);
+    color: #ffc4cd;
+    font-size: 12px;
+    padding: 8px 14px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+  }
+
+  .error-banner.show{ display:flex; }
+
+  .particle{
+    position: fixed;
+    contain: strict;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-a), var(--accent-c));
+    pointer-events: none;
+    z-index: 999;
+    transform: translate(-50%, -50%);
+    animation: particle-burst .6s ease-out forwards;
+  }
+
+  @keyframes particle-burst{
+    0%{ transform: translate(-50%, -50%) translate(0, 0) scale(1); opacity: 1; }
+    100%{ transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
+  }
+
+  /* ── Intro: Explosion, aus der die App entsteht ── */
+  #introOverlay{
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+  }
+
+  .intro-bg{
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 45%, var(--bg-2) 100%);
+    transition: opacity .8s var(--ease-out);
+  }
+
+  .intro-bg.hide{ opacity: 0; }
+
+  .intro-particle{
+    position: absolute;
+    border-radius: 50%;
+    transition: transform 1s cubic-bezier(.3,.7,.2,1), opacity 1s var(--ease-out);
+  }
+
+  .intro-core{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    margin: -5px 0 0 -5px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #ffffff 0%, var(--accent-c) 40%, transparent 75%);
+    opacity: 0;
+    transform: scale(0.3);
+  }
+
+  #introOverlay.charging .intro-core{
+    animation: core-charge .55s ease-in-out infinite;
+  }
+
+  @keyframes core-charge{
+    0%, 100%{ transform: scale(0.5); opacity: 0.5; }
+    50%{ transform: scale(0.85); opacity: 0.95; }
+  }
+
+  #introOverlay.burst .intro-core{
+    animation: core-bloom .7s cubic-bezier(.15,.8,.3,1) forwards;
+  }
+
+  @keyframes core-bloom{
+    0%{ transform: scale(0.8); opacity: 1; }
+    45%{ transform: scale(4.4); opacity: 1; }
+    100%{ transform: scale(0.6); opacity: 0; }
+  }
+
+  .app{
+    pointer-events: none;
+  }
+
+  .app.ready{
+    pointer-events: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    .star, .ambient::after, .ambient::before, .core-glow{ animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="introOverlay">
+  <div class="intro-bg" id="introBg"></div>
+  <div class="intro-core" id="introCore"></div>
+</div>
+
+<div class="ambient" id="ambient" aria-hidden="true">
+  <div class="starfield" id="starfield"></div>
+</div>
+
+<div class="app">
+
+  <div class="watermark" id="watermark" aria-hidden="true"><span>NEXUS PRO</span></div>
+
+  <div class="header">
+    <div class="logo-mark">
+      <svg viewBox="0 0 160 160" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="core1" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#f4f6ff"/>
+            <stop offset="45%" stop-color="#8c5cff"/>
+            <stop offset="100%" stop-color="#5b6ef5"/>
+          </radialGradient>
+          <radialGradient id="core1-halo" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#8c5cff" stop-opacity="0.55"/>
+            <stop offset="100%" stop-color="#8c5cff" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="o1a" x1="20" y1="80" x2="140" y2="80" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#5b6ef5" stop-opacity="0"/>
+            <stop offset="50%" stop-color="#8c5cff"/>
+            <stop offset="100%" stop-color="#5b6ef5" stop-opacity="0"/>
+          </linearGradient>
+          <linearGradient id="o1b" x1="20" y1="80" x2="140" y2="80" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#34d8c4" stop-opacity="0"/>
+            <stop offset="50%" stop-color="#34d8c4"/>
+            <stop offset="100%" stop-color="#34d8c4" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <ellipse cx="80" cy="80" rx="60" ry="24" fill="none" stroke="url(#o1a)" stroke-width="3" transform="rotate(-22 80 80)"/>
+        <ellipse cx="80" cy="80" rx="60" ry="24" fill="none" stroke="url(#o1b)" stroke-width="3" transform="rotate(22 80 80)"/>
+        <circle class="core-glow" cx="80" cy="80" r="32" fill="url(#core1-halo)"/>
+        <circle cx="80" cy="80" r="16" fill="url(#core1)"/>
+        <circle r="4.5" fill="#8c5cff">
+          <animateMotion dur="6.5s" repeatCount="indefinite" path="M135.63,57.52 A60,24,-22,0,1,88.99,102.25 A60,24,-22,0,1,24.37,102.48 A60,24,-22,0,1,71.01,57.75 A60,24,-22,0,1,135.63,57.52"/>
+        </circle>
+        <circle r="4.5" fill="#34d8c4">
+          <animateMotion dur="6.5s" repeatCount="indefinite" begin="-3.25s" path="M135.63,102.48 A60,24,22,0,1,71.01,102.25 A60,24,22,0,1,24.37,57.52 A60,24,22,0,1,88.99,57.75 A60,24,22,0,1,135.63,102.48"/>
+        </circle>
+      </svg>
+    </div>
+    <div>
+      <div class="brand">Nexus<span class="brand-pro">PRO</span></div>
+      <div class="status-line"><span class="dot"></span>Online</div>
+    </div>
+    <button class="notif-btn" id="notifBtn" type="button" tabindex="-1" aria-label="Benachrichtigungen aktivieren">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M6 8a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6.5H4c.5-1 2-2.5 2-6.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M9.5 17.5a2.5 2.5 0 0 0 5 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <span class="notif-dot" id="notifDot"></span>
+    </button>
+  </div>
+
+  <div class="chat" id="chat">
+    <div class="empty-state" id="emptyState">
+      <div class="logo-mark">
+        <svg viewBox="0 0 160 160" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="core2" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#f4f6ff"/>
+              <stop offset="45%" stop-color="#8c5cff"/>
+              <stop offset="100%" stop-color="#5b6ef5"/>
+            </radialGradient>
+            <radialGradient id="core2-halo" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#8c5cff" stop-opacity="0.55"/>
+              <stop offset="100%" stop-color="#8c5cff" stop-opacity="0"/>
+            </radialGradient>
+            <linearGradient id="o2a" x1="20" y1="80" x2="140" y2="80" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#5b6ef5" stop-opacity="0"/>
+              <stop offset="50%" stop-color="#8c5cff"/>
+              <stop offset="100%" stop-color="#5b6ef5" stop-opacity="0"/>
+            </linearGradient>
+            <linearGradient id="o2b" x1="20" y1="80" x2="140" y2="80" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#34d8c4" stop-opacity="0"/>
+              <stop offset="50%" stop-color="#34d8c4"/>
+              <stop offset="100%" stop-color="#34d8c4" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <ellipse cx="80" cy="80" rx="60" ry="24" fill="none" stroke="url(#o2a)" stroke-width="3" transform="rotate(-22 80 80)"/>
+          <ellipse cx="80" cy="80" rx="60" ry="24" fill="none" stroke="url(#o2b)" stroke-width="3" transform="rotate(22 80 80)"/>
+          <circle class="core-glow" cx="80" cy="80" r="32" fill="url(#core2-halo)"/>
+          <circle cx="80" cy="80" r="16" fill="url(#core2)"/>
+          <circle r="4.5" fill="#8c5cff">
+            <animateMotion dur="6.5s" repeatCount="indefinite" path="M135.63,57.52 A60,24,-22,0,1,88.99,102.25 A60,24,-22,0,1,24.37,102.48 A60,24,-22,0,1,71.01,57.75 A60,24,-22,0,1,135.63,57.52"/>
+          </circle>
+          <circle r="4.5" fill="#34d8c4">
+            <animateMotion dur="6.5s" repeatCount="indefinite" begin="-3.25s" path="M135.63,102.48 A60,24,22,0,1,71.01,102.25 A60,24,22,0,1,24.37,57.52 A60,24,22,0,1,88.99,57.75 A60,24,22,0,1,135.63,102.48"/>
+          </circle>
+        </svg>
+      </div>
+      <strong>Nexus<span class="brand-pro">PRO</span></strong>
+      Wie kann ich dir helfen?
+    </div>
+  </div>
+
+  <div class="composer-wrap">
+    <div class="error-banner" id="errorBanner">
+      <span id="errorText">Beim Senden ist ein Fehler aufgetreten.</span>
+    </div>
+
+    <div class="attachment-chip" id="attachmentChip">
+      <div id="attachmentPreview"></div>
+      <button class="chip-remove" id="removeAttachment" type="button" tabindex="-1" aria-label="Aufnahme entfernen">✕</button>
+    </div>
+
+    <div class="composer">
+      <button class="icon-btn cancel-rec" id="cancelRecBtn" type="button" tabindex="-1" aria-label="Aufnahme verwerfen">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-8 0v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="notes-wrap" id="notesWrap">
+        <textarea id="notes" placeholder="Nachricht schreiben …" rows="1" autocorrect="on" autocapitalize="sentences" spellcheck="true" autocomplete="off"></textarea>
+        <div class="record-live" id="recordLive">
+          <span class="rec-dot"></span>
+          <span class="rec-time" id="recLiveTime">0:00</span>
+          <div class="rec-wave" id="recLiveWave"></div>
+        </div>
+      </div>
+      <button class="icon-btn mic" id="recBtn" type="button" tabindex="-1" aria-label="Sprachnachricht aufnehmen">
+        <span class="ring"></span>
+        <svg id="micIcon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button class="send-btn" id="sendBtn" type="button" tabindex="-1" aria-label="Senden">
+        <svg id="sendIcon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 12L20 4L13 20L11 13L4 12Z" fill="currentColor"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── Mobile Keyboard-Fix ─────────────────────────────────────
+  // 100dvh reagiert in dieser eingebetteten Ansicht nicht zuverlässig
+  // auf die Tastatur (das Preview-Fenster ändert seine Größe nicht
+  // automatisch). Deshalb wird die tatsächlich sichtbare Höhe über
+  // visualViewport gemessen und als --vh gesetzt, sodass die
+  // Eingabeleiste beim Öffnen der Tastatur mit hochrutscht.
+  //
+  // Zwei getrennte Größen:
+  //   --vh  = Höhe des Fensters OHNE Tastatur. Ändert sich praktisch nur
+  //           bei Drehung. Damit reflowt die App beim Tippen nie.
+  //   --kb  = aktuelle Höhe der Tastatur. Verschiebt nur den Composer
+  //           per transform — reine Compositor-Arbeit, kein Layout.
+  //
+  // Früher wurde die App-Höhe selbst animiert. Height ist eine
+  // Layout-Eigenschaft: jeder Frame reflowte die gesamte Chatliste.
+  // Zusätzlich meldet iOS visualViewport erst NACH der nativen
+  // Tastatur-Animation — die CSS-Transition riet die Apple-Kurve nach
+  // und lag immer daneben. Deshalb wird während des Öffnens und
+  // Schließens pro Frame gemessen statt geraten.
+  const docEl = document.documentElement;
+  let basisHoehe = 0;
+  let letzteKb = -1;
+  let letzterOffset = -1;
+  let kbLoopId = 0;
+  let kbLoopBis = 0;
+
+  function fensterHoehe(){
+    const vv = window.visualViewport;
+    return vv ? vv.height : window.innerHeight;
+  }
+
+  function basisSetzen(){
+    const h = Math.max(fensterHoehe(), window.innerHeight || 0);
+    if (Math.abs(h - basisHoehe) < 2) return;
+    basisHoehe = h;
+    docEl.style.setProperty('--vh', (h * 0.01) + 'px');
+  }
+
+  // Einmal messen und schreiben. Bewusst nur bei echter Änderung, damit
+  // wir nicht jeden Frame unnötig Style invalidieren.
+  function kbMessen(){
+    const vv = window.visualViewport;
+    const h = fensterHoehe();
+    const offsetTop = vv ? vv.offsetTop : 0;
+    // Tastaturhöhe = wie viel vom Fenster gerade verdeckt ist.
+    let kb = Math.max(0, Math.round(basisHoehe - h - offsetTop));
+    // Unter ~80 px ist es keine Tastatur, sondern die Adressleiste.
+    if (kb < 80) kb = 0;
+    if (kb !== letzteKb){
+      letzteKb = kb;
+      docEl.style.setProperty('--kb', kb + 'px');
+    }
+    const off = Math.round(offsetTop);
+    if (off !== letzterOffset){
+      letzterOffset = off;
+      docEl.style.setProperty('--vh-offset', off + 'px');
+    }
+    return kb;
+  }
+
+  // Während die native Tastatur fährt, jeden Frame nachziehen. iOS gibt
+  // uns kein Fortschritts-Event, also messen wir selbst — rund 600 ms,
+  // das deckt Öffnen wie Schließen ab.
+  function kbVerfolgen(dauerMs){
+    kbLoopBis = Math.max(kbLoopBis, performance.now() + (dauerMs || 600));
+    if (kbLoopId) return;
+    const schritt = () => {
+      kbMessen();
+      if (performance.now() < kbLoopBis){
+        kbLoopId = requestAnimationFrame(schritt);
+      } else {
+        kbLoopId = 0;
+        kbMessen();
+      }
+    };
+    kbLoopId = requestAnimationFrame(schritt);
+  }
+
+  function setVH(){
+    basisSetzen();
+    kbMessen();
+  }
+
+  basisSetzen();
+  kbMessen();
+
+  window.addEventListener('orientationchange', () => {
+    // Nach dem Drehen ist die Basishöhe eine andere — neu einmessen.
+    basisHoehe = 0;
+    setTimeout(() => { basisSetzen(); kbMessen(); }, 250);
+  });
+  window.addEventListener('resize', () => {
+    // Ohne offene Tastatur darf die Basishöhe nachgeführt werden.
+    if (letzteKb === 0) basisSetzen();
+    kbVerfolgen(300);
+  });
+  if (window.visualViewport){
+    window.visualViewport.addEventListener('resize', () => kbVerfolgen(400));
+    window.visualViewport.addEventListener('scroll', () => kbMessen());
+  }
+
+  // ── Konfiguration ─────────────────────────────────────────
+  const WEBHOOK_URL = "https://hook.eu1.make.com/exdl9opobjjs1l49jglae9wqo1ihp47c";
+  const WEBHOOK_TIMEOUT_MS = 30000;
+  // Öffentlicher VAPID-Schlüssel für Web-Push (Gegenstück liegt sicher als
+  // Umgebungsvariable bei Netlify, siehe send-push.js)
+  const VAPID_PUBLIC_KEY = "BKKg_BlxSEL_H6ajVYtfavKfuDPMtvY4uwRoXyDyIOlGhVbSJIB4bmWURMDuEb4f-4hhogK-tqp_k5ts1vT1UGQ";
+  // ──────────────────────────────────────────────────────────
+
+  // ── Stabile Session-ID (ersetzt Telegram-Chat-ID) ──────────
+  // Wird beim allerersten Start einmalig erzeugt und danach dauerhaft
+  // in localStorage gespeichert. Bei jedem weiteren Aufruf der App wird
+  // dieselbe ID wiederverwendet — sie darf sich NIE ändern, sonst kann
+  // Make offene Anfragen (pending_requests) nicht mehr zuordnen.
+  const SESSION_ID_KEY = "session_id";
+  function getSessionId(){
+    try{
+      let id = localStorage.getItem(SESSION_ID_KEY);
+      if (!id){
+        id = (window.crypto && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+              const r = Math.random() * 16 | 0;
+              const v = c === 'x' ? r : (r & 0x3 | 0x8);
+              return v.toString(16);
+            });
+        localStorage.setItem(SESSION_ID_KEY, id);
+      }
+      return id;
+    }catch(e){
+      // Falls localStorage blockiert ist (z.B. privater Modus): pro Ladevorgang
+      // eine ID nutzen, damit die App trotzdem funktioniert.
+      return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+    }
+  }
+  const SESSION_ID = getSessionId();
+
+  // ── Chatverlauf für 48 Stunden speichern ────────────────────
+  // Nachrichten werden lokal im Browser abgelegt, damit sie einen
+  // Neustart der App überstehen. Älter als 48 Stunden -> wird beim
+  // nächsten Laden automatisch entfernt.
+  const CHAT_HISTORY_KEY = 'nexus_chat_history';
+  const CHAT_HISTORY_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+
+  function loadChatHistory(){
+    try{
+      const raw = localStorage.getItem(CHAT_HISTORY_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    }catch(e){
+      return [];
+    }
+  }
+
+  function pruneChatHistory(list){
+    const cutoff = Date.now() - CHAT_HISTORY_MAX_AGE_MS;
+    return list.filter(item => typeof item.ts === 'number' && item.ts >= cutoff);
+  }
+
+  function saveChatHistory(list){
+    try{
+      localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(list));
+    }catch(e){
+      // z.B. Speicher voll oder privater Modus — Verlauf läuft dann
+      // einfach nur innerhalb der aktuellen Sitzung, ohne Fehler.
+    }
+  }
+
+  function appendToChatHistory(entry){
+    const list = pruneChatHistory(loadChatHistory());
+    list.push(entry);
+    saveChatHistory(list);
+  }
+
+  // ── Sprachnachrichten liegen in IndexedDB, nicht in localStorage ──
+  // Base64 blaeht eine Aufnahme um ~33% auf, und localStorage hat nur
+  // ~5 MB. Schlimmer: appendToChatHistory hat bisher bei JEDER Nachricht
+  // den kompletten Verlauf inklusive aller Audios neu serialisiert.
+  // Jetzt liegt im Verlauf nur noch ein Schluessel, der Blob selbst in
+  // IndexedDB (kein Limit-Problem, kein Neuschreiben).
+  const AUDIO_DB = 'nexus-audio';
+  const AUDIO_STORE = 'blobs';
+  let audioDbPromise = null;
+
+  function audioDb(){
+    if (audioDbPromise) return audioDbPromise;
+    audioDbPromise = new Promise((resolve, reject) => {
+      try{
+        if (!window.indexedDB) return reject(new Error('kein indexedDB'));
+        const req = indexedDB.open(AUDIO_DB, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(AUDIO_STORE)) db.createObjectStore(AUDIO_STORE);
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error || new Error('indexedDB blockiert'));
+      }catch(e){ reject(e); }
+    }).catch(e => { audioDbPromise = null; throw e; });
+    return audioDbPromise;
+  }
+
+  function audioTx(modus, fn){
+    return audioDb().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction(AUDIO_STORE, modus);
+      const req = fn(tx.objectStore(AUDIO_STORE));
+      tx.onabort = () => reject(tx.error || new Error('tx abgebrochen'));
+      tx.onerror = () => reject(tx.error || new Error('tx fehlgeschlagen'));
+      if (req) req.onsuccess = () => resolve(req.result);
+      else tx.oncomplete = () => resolve(undefined);
+    }));
+  }
+
+  function audioSpeichern(key, blob){ return audioTx('readwrite', st => st.put(blob, key)); }
+  function audioLaden(key){ return audioTx('readonly', st => st.get(key)); }
+
+  // Alles wegwerfen, was im Verlauf nicht mehr vorkommt (48h-Fenster).
+  async function audioAufraeumen(gueltige){
+    try{
+      const keys = await audioTx('readonly', st => st.getAllKeys());
+      if (!Array.isArray(keys)) return;
+      const behalten = new Set(gueltige);
+      for (const k of keys){
+        if (!behalten.has(k)) await audioTx('readwrite', st => st.delete(k));
+      }
+    }catch(e){ /* Aufraeumen ist Kuer, nie Pflicht */ }
+  }
+
+  // ── Blob-URLs sauber freigeben ──────────────────────────────
+  // Jede nicht freigegebene Objekt-URL haelt ihren Blob im Speicher,
+  // bis der Tab geschlossen wird. Bei Sprachnachrichten sind das
+  // schnell etliche MB. Wir geben sie frei, sobald die Blase aus dem
+  // Chat verschwindet, spaetestens beim Verlassen der Seite.
+  const offeneUrls = new Set();
+  function merkeUrl(url){ if (url && url.indexOf('blob:') === 0) offeneUrls.add(url); return url; }
+  function gibUrlFrei(url){
+    if (!url || !offeneUrls.has(url)) return;
+    offeneUrls.delete(url);
+    try{ URL.revokeObjectURL(url); }catch(e){}
+  }
+
+  (function initUrlAufraeumer(){
+    const chatEl = document.getElementById('chat');
+    if (chatEl && window.MutationObserver){
+      const nochImChat = (url) => !!chatEl.querySelector('[data-nx-url="' + url + '"]');
+      new MutationObserver(muts => {
+        const kandidaten = [];
+        for (const m of muts){
+          for (const node of m.removedNodes){
+            if (node.nodeType !== 1) continue;
+            if (node.dataset && node.dataset.nxUrl) kandidaten.push(node.dataset.nxUrl);
+            const inner = node.querySelectorAll ? node.querySelectorAll('[data-nx-url]') : [];
+            for (const el of inner) kandidaten.push(el.dataset.nxUrl);
+          }
+        }
+        // Erst freigeben, wenn die URL wirklich nirgends mehr haengt —
+        // beim Neuaufbau des Verlaufs wird kurzzeitig entfernt und gleich
+        // wieder eingehaengt.
+        for (const u of kandidaten){ if (!nochImChat(u)) gibUrlFrei(u); }
+      }).observe(chatEl, { childList: true, subtree: true });
+    }
+    window.addEventListener('pagehide', () => {
+      for (const u of offeneUrls){ try{ URL.revokeObjectURL(u); }catch(e){} }
+      offeneUrls.clear();
+    });
+  })();
+
+  function blobToBase64(blob){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function restoreChatHistory(){
+    const pruned = pruneChatHistory(loadChatHistory());
+    saveChatHistory(pruned);
+    if (!pruned.length) return;
+
+    // Waehrend des Aufbaus nicht nach jeder Blase scrollen — das erzwingt
+    // pro Nachricht ein komplettes Layout. Einmal am Ende reicht.
+    restoreLaeuft = true;
+    try{
+      for (const item of pruned){
+        const atDate = new Date(item.ts);
+        if (item.type === 'text'){
+          const { ticks } = addTextBubble(item.text, item.direction, atDate);
+          if (ticks) confirmTicks(ticks);
+        } else if (item.type === 'audio'){
+          try{
+            let blob = null;
+            if (item.audioKey){
+              blob = await audioLaden(item.audioKey);
+            } else if (item.audioDataUrl){
+              // Alte Eintraege aus der Base64-Zeit weiterhin anzeigen.
+              blob = await (await fetch(item.audioDataUrl)).blob();
+            }
+            if (!blob) continue;
+            const url = merkeUrl(URL.createObjectURL(blob));
+            const { ticks } = addVoiceBubble(url, item.peaks || null, item.direction, atDate);
+            if (ticks) confirmTicks(ticks);
+          }catch(e){
+            // Einzelne Sprachnachricht konnte nicht wiederhergestellt
+            // werden — restlichen Verlauf trotzdem weiter anzeigen.
+          }
+        }
+      }
+    } finally {
+      restoreLaeuft = false;
+      scrollToBottom();
+    }
+
+    audioAufraeumen(pruned.filter(i => i && i.audioKey).map(i => i.audioKey));
+  }
+
+  // ── Push-Benachrichtigungen ─────────────────────────────────
+  // Ablauf: Service Worker registrieren -> Nutzer fragen -> beim
+  // Push-Dienst des Browsers anmelden -> das Abo (Subscription) an
+  // Make.com schicken, damit ihr es dort dem Nutzer (session_id)
+  // zuordnen und später Push-Nachrichten auslösen könnt.
+  function urlBase64ToUint8Array(base64String){
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; i++){
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  function isIosStandalone(){
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+    return { isIos, isStandalone };
+  }
+
+  async function sendSubscriptionToMake(subscription){
+    const formData = new FormData();
+    formData.append('type', 'push_subscription');
+    formData.append('session_id', SESSION_ID);
+    formData.append('subscription', JSON.stringify(subscription));
+    formData.append('timestamp', new Date().toISOString());
+    try{
+      await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
+    }catch(e){
+      console.error('Push-Abo konnte nicht gespeichert werden:', e);
+    }
+  }
+
+  async function subscribeToPush(){
+    const { isIos, isStandalone } = isIosStandalone();
+    if (isIos && !isStandalone){
+      showError("Auf dem iPhone geht das erst, wenn die App zum Home-Bildschirm hinzugefügt wurde.");
+      return;
+    }
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)){
+      showError("Push-Benachrichtigungen werden von diesem Browser nicht unterstützt.");
+      return;
+    }
+    try{
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted'){
+        notifBtn.classList.remove('granted');
+        return;
+      }
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription){
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+      }
+      await sendSubscriptionToMake(subscription);
+      notifBtn.classList.add('granted');
+      notifBtn.classList.remove('needs-attention');
+    }catch(e){
+      console.error('Push-Anmeldung fehlgeschlagen:', e);
+      showError("Benachrichtigungen konnten nicht aktiviert werden.");
+    }
+  }
+
+  const notifBtn = document.getElementById('notifBtn');
+  if (notifBtn){
+    notifBtn.addEventListener('click', subscribeToPush);
+    // Beim Laden prüfen, ob schon erlaubt/abonniert ist, und den
+    // Button entsprechend einfärben.
+    (async () => {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      if (typeof Notification === 'undefined') return;
+      if (Notification.permission === 'granted'){
+        try{
+          const reg = await navigator.serviceWorker.getRegistration();
+          const sub = reg ? await reg.pushManager.getSubscription() : null;
+          if (sub) notifBtn.classList.add('granted');
+        }catch(e){ /* ignorieren */ }
+      } else if (Notification.permission === 'default'){
+        notifBtn.classList.add('needs-attention');
+      }
+    })();
+  }
+
+  const chat = document.getElementById('chat');
+  const emptyState = document.getElementById('emptyState');
+  const watermark = document.getElementById('watermark');
+  const notesEl = document.getElementById('notes');
+  const appEl = document.querySelector('.app');
+  const notesWrap = document.getElementById('notesWrap');
+  const sendBtn = document.getElementById('sendBtn');
+  const recBtn = document.getElementById('recBtn');
+  const cancelRecBtn = document.getElementById('cancelRecBtn');
+  const recLiveTime = document.getElementById('recLiveTime');
+  const recLiveWave = document.getElementById('recLiveWave');
+  const attachmentChip = document.getElementById('attachmentChip');
+  const attachmentPreview = document.getElementById('attachmentPreview');
+  const removeAttachment = document.getElementById('removeAttachment');
+  const errorBanner = document.getElementById('errorBanner');
+  const errorText = document.getElementById('errorText');
+
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let audioBlob = null;
+  let audioPeaks = null;
+  let isRecording = false;
+  let discardOnStop = false;
+  let recordingStopResolve = null;
+  let stream = null;
+  let timerInterval = null;
+  let seconds = 0;
+
+  // Live-Waveform während der Aufnahme
+  const LIVE_BARS = 32;
+  let liveLevels = new Array(LIVE_BARS).fill(0.06);
+  let liveAudioCtx = null;
+  let liveAnalyser = null;
+  let liveDataArray = null;
+  let liveRafId = null;
+  let lastSampleTime = 0;
+
+  for (let i = 0; i < LIVE_BARS; i++){
+    const bar = document.createElement('span');
+    recLiveWave.appendChild(bar);
+  }
+
+  function renderLiveWave(){
+    const bars = recLiveWave.children;
+    for (let i = 0; i < bars.length; i++){
+      bars[i].style.height = Math.max(3, liveLevels[i] * 22) + 'px';
+    }
+  }
+
+  function liveWaveTick(ts){
+    if (!isRecording) return;
+    if (ts - lastSampleTime > 65){
+      lastSampleTime = ts;
+      liveAnalyser.getByteTimeDomainData(liveDataArray);
+      let sum = 0;
+      for (let i = 0; i < liveDataArray.length; i++){
+        const v = (liveDataArray[i] - 128) / 128;
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / liveDataArray.length);
+      liveLevels.push(Math.min(1, rms * 4.5));
+      liveLevels.shift();
+      renderLiveWave();
+    }
+    liveRafId = requestAnimationFrame(liveWaveTick);
+  }
+
+  // Auto-grow textarea
+  // Auto-grow lief pro Tastendruck sofort und erzwang jedes Mal ein
+  // Layout mitten im Tippen. Jetzt wird einmal pro Frame gemessen und die
+  // Hoehe nur geschrieben, wenn sie sich wirklich geaendert hat.
+  let letzteHoehe = -1;
+  let hoehenFrame = 0;
+  function hoeheAnpassen(){
+    hoehenFrame = 0;
+    notesEl.style.height = 'auto';
+    const h = Math.min(notesEl.scrollHeight, 120);
+    notesEl.style.height = h + 'px';
+    letzteHoehe = h;
+  }
+  notesEl.addEventListener('input', () => {
+    if (hoehenFrame) return;
+    hoehenFrame = requestAnimationFrame(hoeheAnpassen);
+  });
+
+  notesEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey){
+      e.preventDefault();
+      handleSend();
+    }
+  });
+
+  // ── iOS-Fix: verhindert, dass Safari beim Fokussieren des
+  // Eingabefelds die ganze Seite nach oben wegscrollt (wodurch
+  // Header/Logo aus dem sichtbaren Bereich rutschen würden).
+  // Statt das native Scrollen zu erlauben und danach zu korrigieren
+  // (das verursacht den sichtbaren Ruckler), wird der Fokus hier
+  // selbst gesetzt — mit preventScroll — bevor Safari die Chance hat,
+  // die Seite zu verschieben. ──
+  function lockScrollTop(){
+    if (window.scrollY !== 0) window.scrollTo(0, 0);
+    if (document.documentElement.scrollTop !== 0) document.documentElement.scrollTop = 0;
+    if (document.body.scrollTop !== 0) document.body.scrollTop = 0;
+  }
+
+  notesEl.addEventListener('touchend', (e) => {
+    if (document.activeElement !== notesEl){
+      e.preventDefault();
+      notesEl.focus({ preventScroll: true });
+    }
+  }, { passive: false });
+
+  // Früher standen hier 13 setTimeout-Aufrufe, die während der
+  // Tastatur-Animation Layout und Scrollposition erzwangen — genau das
+  // hat geruckelt. Jetzt läuft während der Bewegung eine einzige
+  // rAF-Schleife, die misst, den Composer nachzieht und das Seiten-
+  // Scrollen bei 0 hält.
+  let kbScrollLoop = 0;
+  let kbScrollBis = 0;
+  function kbBegleiten(dauerMs){
+    kbVerfolgen(dauerMs);
+    // Solange wir pro Frame messen, darf keine CSS-Transition auf dem
+    // transform liegen — sonst laeuft sie der Messung hinterher.
+    appEl.classList.add('kb-aktiv');
+    kbScrollBis = Math.max(kbScrollBis, performance.now() + (dauerMs || 600));
+    if (kbScrollLoop) return;
+    const schritt = () => {
+      lockScrollTop();
+      if (performance.now() < kbScrollBis){
+        kbScrollLoop = requestAnimationFrame(schritt);
+      } else {
+        kbScrollLoop = 0;
+        lockScrollTop();
+        appEl.classList.remove('kb-aktiv');
+      }
+    };
+    kbScrollLoop = requestAnimationFrame(schritt);
+  }
+
+  notesEl.addEventListener('focus', () => {
+    appEl.classList.add('kb-open');
+    kbBegleiten(700);
+    // Letzte Nachricht sichtbar halten: der Chat bekommt unten Platz in
+    // Höhe der Tastatur, also einmal ans Ende scrollen, sobald der
+    // Platz steht. Zweimal reicht — Anfang und Ende der Bewegung.
+    requestAnimationFrame(scrollToBottom);
+    setTimeout(scrollToBottom, 420);
+  });
+
+  notesEl.addEventListener('blur', () => {
+    appEl.classList.remove('kb-open');
+    kbBegleiten(700);
+  });
+
+  // ── Tastatur schließen bei Tap in den Chatverlauf ───────────
+  // Repliziert das WhatsApp-Verhalten: Tippen auf den Nachrichtenbereich
+  // schließt die Tastatur, ohne etwas zu senden.
+  chat.addEventListener('touchstart', () => {
+    if (document.activeElement === notesEl) notesEl.blur();
+  }, { passive: true });
+
+  window.addEventListener('scroll', () => {
+    if (document.activeElement === notesEl) lockScrollTop();
+  }, { passive: true });
+
+  let restoreLaeuft = false;
+  function scrollToBottom(){
+    if (restoreLaeuft) return;
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function hideEmptyState(){
+    if (emptyState) emptyState.style.display = 'none';
+    if (watermark) watermark.classList.add('show');
+  }
+
+  function formatClock(d){
+    return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function formatDuration(s){
+    if (!isFinite(s) || s < 0) s = 0;
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60).toString().padStart(2, '0');
+    return `${m}:${sec}`;
+  }
+
+  function createTicks(){
+    const span = document.createElement('span');
+    span.className = 'ticks';
+    span.innerHTML =
+      '<svg viewBox="0 0 16 11" width="15" height="11" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+      '<path class="check-1" d="M1 5.7L4.7 9.3L10.4 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<path class="check-2" d="M5.2 5.7L8.9 9.3L15 1.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '</svg>';
+    return span;
+  }
+
+  function confirmTicks(ticks){
+    if (ticks) ticks.classList.add('confirmed');
+  }
+
+  function addTypingBubble(){
+    hideEmptyState();
+    const row = document.createElement('div');
+    row.className = 'row in';
+    const wrap = document.createElement('div');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble typing';
+    bubble.innerHTML = '<span></span><span></span><span></span>';
+    wrap.appendChild(bubble);
+    row.appendChild(wrap);
+    chat.appendChild(row);
+    scrollToBottom();
+    return row;
+  }
+
+  function addTextBubble(text, direction, atDate){
+    hideEmptyState();
+    const row = document.createElement('div');
+    row.className = `row ${direction}`;
+    const wrap = document.createElement('div');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text;
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const time = document.createElement('span');
+    time.className = 'timestamp';
+    time.textContent = formatClock(atDate || new Date());
+    meta.appendChild(time);
+    let ticks = null;
+    if (direction === 'out'){
+      ticks = createTicks();
+      meta.appendChild(ticks);
+    }
+    wrap.appendChild(bubble);
+    wrap.appendChild(meta);
+    row.appendChild(wrap);
+    chat.appendChild(row);
+    scrollToBottom();
+    return { row, ticks };
+  }
+
+  // ── Individueller Voice-Player mit Wellenform ──────────
+  const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8V4z"/></svg>';
+  const pauseIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>';
+
+  function buildVoicePlayer(blobUrl, peaks){
+    const container = document.createElement('div');
+    container.className = 'voice-player';
+
+    const playBtn = document.createElement('button');
+    playBtn.className = 'voice-play-btn';
+    playBtn.type = 'button';
+    playBtn.innerHTML = playIcon;
+    playBtn.setAttribute('aria-label', 'Abspielen');
+
+    const waveEl = document.createElement('div');
+    waveEl.className = 'voice-wave';
+    const bars = (peaks && peaks.length ? peaks : new Array(32).fill(0.4)).map(p => {
+      const bar = document.createElement('span');
+      bar.style.height = Math.max(3, p * 26) + 'px';
+      waveEl.appendChild(bar);
+      return bar;
+    });
+
+    const durationEl = document.createElement('span');
+    durationEl.className = 'voice-duration';
+    durationEl.textContent = '0:00';
+
+    const audio = new Audio(blobUrl);
+    audio.preload = 'metadata';
+
+    // WebM-Aufnahmen aus MediaRecorder melden anfangs oft duration=Infinity,
+    // weil der Browser die Gesamtlänge nicht aus den Metadaten lesen kann.
+    // Fix: kurz ans Ende springen, das erzwingt die echte Berechnung.
+    function resolveDuration(){
+      if (isFinite(audio.duration) && audio.duration > 0){
+        durationEl.textContent = formatDuration(audio.duration);
+        return;
+      }
+      const onDurationChange = () => {
+        if (isFinite(audio.duration) && audio.duration > 0){
+          audio.removeEventListener('durationchange', onDurationChange);
+          durationEl.textContent = formatDuration(audio.duration);
+          audio.currentTime = 0;
+        }
+      };
+      audio.addEventListener('durationchange', onDurationChange);
+      audio.currentTime = 1e101;
+    }
+
+    audio.addEventListener('loadedmetadata', resolveDuration);
+
+    function setProgress(frac){
+      const activeCount = Math.round(frac * bars.length);
+      bars.forEach((b, i) => b.classList.toggle('played', i < activeCount));
+    }
+
+    audio.addEventListener('play', () => { playBtn.innerHTML = pauseIcon; });
+    audio.addEventListener('pause', () => { playBtn.innerHTML = playIcon; });
+    audio.addEventListener('ended', () => {
+      playBtn.innerHTML = playIcon;
+      setProgress(0);
+      if (isFinite(audio.duration)) durationEl.textContent = formatDuration(audio.duration);
+    });
+
+    audio.addEventListener('timeupdate', () => {
+      if (!isFinite(audio.duration) || audio.duration === 0) return;
+      setProgress(audio.currentTime / audio.duration);
+      durationEl.textContent = formatDuration(audio.duration - audio.currentTime);
+    });
+
+    playBtn.addEventListener('click', () => {
+      if (audio.paused){
+        document.querySelectorAll('audio').forEach(a => { if (a !== audio) a.pause(); });
+        audio.play();
+      } else {
+        audio.pause();
+      }
+    });
+
+    waveEl.addEventListener('click', (e) => {
+      const rect = waveEl.getBoundingClientRect();
+      const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+      if (isFinite(audio.duration)) audio.currentTime = frac * audio.duration;
+    });
+
+    container.appendChild(playBtn);
+    container.appendChild(waveEl);
+    container.appendChild(durationEl);
+    // Das Audio-Objekt selbst haengt nicht im DOM. Damit die Blob-URL beim
+    // Entfernen der Blase trotzdem freigegeben werden kann, wird sie hier
+    // am sichtbaren Element vermerkt.
+    container.dataset.nxUrl = blobUrl;
+    return container;
+  }
+
+  function addVoiceBubble(blobUrl, peaks, direction, atDate){
+    hideEmptyState();
+    const row = document.createElement('div');
+    row.className = `row ${direction}`;
+    const wrap = document.createElement('div');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble audio-bubble';
+    bubble.appendChild(buildVoicePlayer(blobUrl, peaks));
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const time = document.createElement('span');
+    time.className = 'timestamp';
+    time.textContent = formatClock(atDate || new Date());
+    meta.appendChild(time);
+    let ticks = null;
+    if (direction === 'out'){
+      ticks = createTicks();
+      meta.appendChild(ticks);
+    }
+    wrap.appendChild(bubble);
+    wrap.appendChild(meta);
+    row.appendChild(wrap);
+    chat.appendChild(row);
+    scrollToBottom();
+    return { row, ticks };
+  }
+
+  async function computeWaveformPeaks(blob, numBars){
+    try{
+      const arrayBuffer = await blob.arrayBuffer();
+      const OfflineCtx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new OfflineCtx();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+      const rawData = audioBuffer.getChannelData(0);
+      const blockSize = Math.max(1, Math.floor(rawData.length / numBars));
+      const peaks = [];
+      for (let i = 0; i < numBars; i++){
+        const start = i * blockSize;
+        let sum = 0;
+        for (let j = 0; j < blockSize; j++){
+          sum += Math.abs(rawData[start + j] || 0);
+        }
+        peaks.push(sum / blockSize);
+      }
+      const max = Math.max(...peaks) || 1;
+      ctx.close();
+      return peaks.map(p => Math.max(0.12, p / max));
+    }catch(err){
+      return Array.from({ length: numBars }, () => 0.2 + Math.random() * 0.7);
+    }
+  }
+
+  let errorTimer = null;
+  function showError(msg){
+    errorText.textContent = msg;
+    errorBanner.classList.add('show');
+    // Ohne clearTimeout blendet ein alter Timer den neuen Fehler zu frueh aus.
+    if (errorTimer) clearTimeout(errorTimer);
+    errorTimer = setTimeout(() => { errorBanner.classList.remove('show'); errorTimer = null; }, 5000);
+  }
+
+  // ── Sprachaufnahme ──────────────────────────────────────
+  async function startRecording(){
+    errorBanner.classList.remove('show');
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }catch(err){
+      showError("Mikrofonzugriff verweigert oder nicht verfügbar.");
+      return;
+    }
+
+    audioChunks = [];
+    discardOnStop = false;
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+      ? 'audio/webm'
+      : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
+    mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+
+    mediaRecorder.addEventListener('dataavailable', e => {
+      if (e.data && e.data.size > 0) audioChunks.push(e.data);
+    });
+
+    mediaRecorder.addEventListener('stop', async () => {
+      stream.getTracks().forEach(t => t.stop());
+
+      if (discardOnStop){
+        audioBlob = null;
+        audioPeaks = null;
+        if (recordingStopResolve){ recordingStopResolve(); recordingStopResolve = null; }
+        return;
+      }
+
+      audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      audioPeaks = await computeWaveformPeaks(audioBlob, 32);
+      const blobUrl = merkeUrl(URL.createObjectURL(audioBlob));
+      attachmentPreview.innerHTML = '';
+      attachmentPreview.appendChild(buildVoicePlayer(blobUrl, audioPeaks));
+      attachmentChip.classList.add('show');
+
+      if (recordingStopResolve){ recordingStopResolve(); recordingStopResolve = null; }
+    });
+
+    mediaRecorder.start();
+    isRecording = true;
+    seconds = 0;
+    liveLevels = new Array(LIVE_BARS).fill(0.06);
+    renderLiveWave();
+
+    // Live-Analyser für die Wellenform während der Aufnahme
+    liveAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = liveAudioCtx.createMediaStreamSource(stream);
+    liveAnalyser = liveAudioCtx.createAnalyser();
+    liveAnalyser.fftSize = 256;
+    source.connect(liveAnalyser);
+    liveDataArray = new Uint8Array(liveAnalyser.fftSize);
+    lastSampleTime = 0;
+    liveRafId = requestAnimationFrame(liveWaveTick);
+
+    recBtn.classList.add('recording');
+    recBtn.setAttribute('aria-label', 'Aufnahme stoppen');
+    cancelRecBtn.classList.add('show');
+    notesWrap.classList.add('recording');
+    recLiveTime.textContent = '0:00';
+
+    timerInterval = setInterval(() => {
+      seconds += 1;
+      recLiveTime.textContent = formatDuration(seconds);
+    }, 1000);
+  }
+
+  function stopRecording(){
+    return new Promise((resolve) => {
+      // Notbremse: feuert der Recorder sein "stop"-Event nicht (kommt auf
+      // aelteren iOS-Versionen vor), haengt das Senden sonst fuer immer.
+      let notbremse = setTimeout(() => {
+        notbremse = null;
+        if (recordingStopResolve){ recordingStopResolve = null; resolve(); }
+      }, 3000);
+
+      recordingStopResolve = () => {
+        if (notbremse){ clearTimeout(notbremse); notbremse = null; }
+        resolve();
+      };
+
+      if (mediaRecorder && mediaRecorder.state !== 'inactive'){
+        mediaRecorder.stop();
+      } else {
+        recordingStopResolve = null;
+        if (notbremse){ clearTimeout(notbremse); notbremse = null; }
+        resolve();
+      }
+
+      clearInterval(timerInterval);
+      cancelAnimationFrame(liveRafId);
+      if (liveAudioCtx){ liveAudioCtx.close(); liveAudioCtx = null; }
+      isRecording = false;
+
+      recBtn.classList.remove('recording');
+      recBtn.setAttribute('aria-label', 'Sprachnachricht aufnehmen');
+      cancelRecBtn.classList.remove('show');
+      notesWrap.classList.remove('recording');
+    });
+  }
+
+  recBtn.addEventListener('click', () => {
+    if (isRecording){ stopRecording(); } else { startRecording(); }
+  });
+
+  cancelRecBtn.addEventListener('click', () => {
+    discardOnStop = true;
+    stopRecording();
+    attachmentChip.classList.remove('show');
+    attachmentPreview.innerHTML = '';
+  });
+
+  removeAttachment.addEventListener('click', () => {
+    audioBlob = null;
+    audioPeaks = null;
+    attachmentChip.classList.remove('show');
+    attachmentPreview.innerHTML = '';
+  });
+
+  const ambient = document.getElementById('ambient');
+  const starfield = document.getElementById('starfield');
+
+  function createStarfield(container, count){
+    container.innerHTML = '';
+    const accentColors = ['rgba(91,110,245,0.95)', 'rgba(140,92,255,0.95)', 'rgba(52,216,196,0.95)'];
+    for (let i = 0; i < count; i++){
+      const star = document.createElement('span');
+      star.className = 'star';
+
+      const isNode = Math.random() < 0.12;
+      const size = isNode ? 3 + Math.random() * 2 : 1 + Math.random() * 1.8;
+      const color = isNode
+        ? accentColors[Math.floor(Math.random() * accentColors.length)]
+        : 'rgba(255,255,255,0.95)';
+
+      const top = Math.random() * 100;
+      const left = Math.random() * 100;
+      const dx = (Math.random() * 16 - 8).toFixed(1);
+      const dy = (Math.random() * 16 - 8).toFixed(1);
+      const dur = 14 + Math.random() * 26;
+      const tw = 2 + Math.random() * 5;
+      const opMin = 0.15 + Math.random() * 0.15;
+      const opMax = 0.55 + Math.random() * 0.4;
+
+      // Glow frueher als animierter box-shadow — der teuerste Effekt der
+      // Datei. Jetzt steckt das Leuchten als radial-gradient direkt im
+      // Hintergrund: gleiche Optik, aber der Compositor muss pro Frame
+      // nichts mehr neu berechnen.
+      const glow = isNode ? size * 4.2 : size * 2.6;
+      const kern = ((size / glow) * 50).toFixed(1);
+      star.style.top = top + '%';
+      star.style.left = left + '%';
+      star.style.width = glow + 'px';
+      star.style.height = glow + 'px';
+      star.style.marginTop = (-glow / 2) + 'px';
+      star.style.marginLeft = (-glow / 2) + 'px';
+      star.style.background =
+        `radial-gradient(circle, ${color} 0%, ${color} ${kern}%, ` +
+        `${color.replace(/[\d.]+\)$/, '0.28)')} ${Number(kern) * 2}%, transparent 68%)`;
+      star.style.setProperty('--dx', dx + 'vw');
+      star.style.setProperty('--dy', dy + 'vh');
+      star.style.setProperty('--dur', dur + 's');
+      star.style.setProperty('--tw', tw + 's');
+      star.style.setProperty('--op-min', opMin);
+      star.style.setProperty('--op-max', opMax);
+      star.style.animationDelay = `-${(Math.random() * dur).toFixed(1)}s, -${(Math.random() * tw).toFixed(1)}s`;
+
+      container.appendChild(star);
+    }
+  }
+
+  // Auf dem Handy sind 70 animierte Sterne reine Verschwendung — man sieht
+  // den Unterschied nicht, spuert ihn aber beim Scrollen.
+  const istSchmal = window.matchMedia('(max-width: 480px)').matches;
+  createStarfield(starfield, istSchmal ? 30 : 45);
+
+  // Versteckter Tab: Sterne anhalten. Spart auf dem Handy spuerbar Akku
+  // und der Browser muss beim Zurueckkommen nichts nachrechnen.
+  document.addEventListener('visibilitychange', () => {
+    starfield.classList.toggle('paused', document.hidden);
+  });
+
+  // ── "Gummiband"-Effekt für den Chatverlauf (wie bei WhatsApp) ──────
+  // Wenn noch nicht genug Nachrichten da sind, um wirklich zu scrollen,
+  // passierte bisher beim Ziehen gar nichts — das wirkte kaputt. Jetzt
+  // bewegt sich der Inhalt beim Ziehen sanft und gedämpft mit und
+  // federt danach weich in die Ausgangsposition zurück.
+  (function initChatRubberBand(){
+    if (!chat) return;
+    let startY = 0;
+    let dragging = false;
+
+    function canNativeScroll(){
+      return chat.scrollHeight > chat.clientHeight + 1;
+    }
+
+    chat.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1 || canNativeScroll()) return;
+      startY = e.touches[0].clientY;
+      dragging = true;
+      chat.style.transition = 'none';
+    }, { passive: true });
+
+    chat.addEventListener('touchmove', (e) => {
+      if (!dragging) return;
+      const y = e.touches[0].clientY;
+      const deltaY = y - startY;
+      // Widerstand: je weiter gezogen wird, desto weniger folgt die Bewegung
+      const resisted = Math.sign(deltaY) * Math.min(Math.abs(deltaY) * 0.38, 46);
+      chat.style.transform = `translateY(${resisted}px)`;
+      e.preventDefault();
+    }, { passive: false });
+
+    function releaseRubberBand(){
+      if (!dragging) return;
+      dragging = false;
+      chat.style.transition = 'transform .32s cubic-bezier(.2,.8,.2,1)';
+      chat.style.transform = 'translateY(0)';
+    }
+
+    chat.addEventListener('touchend', releaseRubberBand, { passive: true });
+    chat.addEventListener('touchcancel', releaseRubberBand, { passive: true });
+  })();
+
+  // Zusätzliche Sterne gezielt im unteren Sicherheitsbereich (Home-Indicator-
+  // Zone) platzieren, damit dieser Streifen nie zufällig leer/flach aussieht
+  // und optisch nahtlos in den restlichen Sternenhimmel übergeht.
+  (function addBottomSafeAreaStars(){
+    const extra = document.createElement('div');
+    extra.style.position = 'absolute';
+    extra.style.left = '0'; extra.style.right = '0'; extra.style.bottom = '0';
+    extra.style.height = '6%';
+    starfield.appendChild(extra);
+    createStarfield(extra, istSchmal ? 4 : 6);
+  })();
+
+  // ── Intro-Sequenz: Explosion, aus der die App direkt entsteht ──
+  (function runIntro(){
+    const introOverlay = document.getElementById('introOverlay');
+    const introBg = document.getElementById('introBg');
+    const introCore = document.getElementById('introCore');
+    const appEl = document.querySelector('.app');
+    const headerEl = document.querySelector('.header');
+    const composerWrapEl = document.querySelector('.composer-wrap');
+    if (!introOverlay || !appEl) return;
+
+    // Explosionszentrum exakt auf die Position des echten Empty-State-Logos legen,
+    // damit Logo/Blitz nahtlos an derselben Stelle ineinander übergehen.
+    const logoEl = emptyState ? emptyState.querySelector('.logo-mark') : null;
+    const logoRect = logoEl ? logoEl.getBoundingClientRect() : null;
+    const cx = logoRect ? logoRect.left + logoRect.width / 2 : window.innerWidth / 2;
+    const cy = logoRect ? logoRect.top + logoRect.height / 2 : window.innerHeight / 2;
+
+    if (introCore){
+      introCore.style.left = cx + 'px';
+      introCore.style.top = cy + 'px';
+    }
+
+    const particles = [];
+    const count = 46;
+
+    for (let i = 0; i < count; i++){
+      const p = document.createElement('span');
+      p.className = 'intro-particle';
+      const targetX = Math.random() * window.innerWidth;
+      const targetY = Math.random() * window.innerHeight;
+      const size = 1.5 + Math.random() * 2.6;
+      const isAccent = Math.random() < 0.25;
+      const color = isAccent
+        ? ['#5b6ef5', '#8c5cff', '#34d8c4'][Math.floor(Math.random() * 3)]
+        : '#ffffff';
+      const targetOpacity = (0.4 + Math.random() * 0.5).toFixed(2);
+
+      // Start: gebündelt im Zentrum, unsichtbar, winzig
+      p.style.left = cx + 'px';
+      p.style.top = cy + 'px';
+      p.style.width = size + 'px';
+      p.style.height = size + 'px';
+      p.style.background = color;
+      p.style.boxShadow = `0 0 ${size * 3}px ${color}`;
+      p.style.opacity = '0';
+      p.style.transform = 'translate(0, 0) scale(0.2)';
+      p.style.transitionDuration = (900 + Math.random() * 500) + 'ms';
+
+      introOverlay.appendChild(p);
+      particles.push({
+        el: p,
+        dx: targetX - cx,
+        dy: targetY - cy,
+        opacity: targetOpacity
+      });
+    }
+
+    // Phase 1: Kern lädt auf
+    introOverlay.classList.add('charging');
+
+    // Phase 2: Explosion — Kern-Blitz + Partikel fliegen nach außen,
+    // gleichzeitig beginnt der dunkle Hintergrund-Layer zu verblassen
+    setTimeout(() => {
+      introOverlay.classList.remove('charging');
+      introOverlay.classList.add('burst');
+      if (introBg) introBg.classList.add('hide');
+
+      particles.forEach(({ el, dx, dy, opacity }) => {
+        el.style.transitionDelay = Math.round(Math.random() * 90) + 'ms';
+        el.style.transform = `translate(${dx}px, ${dy}px) scale(1)`;
+        el.style.opacity = opacity;
+      });
+    }, 620);
+
+    // Phase 3: Mitten im hellen Blitz stehen Logo + Name schon da —
+    // es wirkt, als würden sie aus dem Licht entstehen
+    setTimeout(() => {
+      if (headerEl) headerEl.classList.add('show');
+      if (emptyState) emptyState.classList.add('show');
+    }, 760);
+
+    // Phase 4: Kurz danach fährt die Eingabeleiste dynamisch hoch
+    setTimeout(() => {
+      if (composerWrapEl) composerWrapEl.classList.add('show');
+      appEl.classList.add('ready');
+    }, 1280);
+
+    // Phase 5: Partikel lösen sich sanft auf, statt abrupt zu verschwinden
+    setTimeout(() => {
+      particles.forEach(({ el }, i) => {
+        el.style.transitionDuration = '650ms';
+        el.style.transitionDelay = Math.round(i * 4) + 'ms';
+        el.style.opacity = '0';
+      });
+    }, 1750);
+
+    // Phase 6: Overlay endgültig entfernen (Partikel sind bereits ausgeblendet)
+    setTimeout(() => {
+      introOverlay.remove();
+      particles.length = 0;
+    }, 2550);
+  })();
+
+  function pulseAmbient(){
+    if (!ambient) return;
+    ambient.classList.add('pulse');
+    setTimeout(() => ambient.classList.remove('pulse'), 650);
+  }
+
+  function burstParticles(button){
+    const rect = button.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const count = 10;
+    for (let i = 0; i < count; i++){
+      const p = document.createElement('div');
+      p.className = 'particle';
+      const angle = (Math.PI * 2 * i) / count + Math.random() * 0.3;
+      const dist = 24 + Math.random() * 20;
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist;
+      p.style.left = cx + 'px';
+      p.style.top = cy + 'px';
+      p.style.setProperty('--dx', dx + 'px');
+      p.style.setProperty('--dy', dy + 'px');
+      document.body.appendChild(p);
+      p.addEventListener('animationend', () => p.remove());
+    }
+  }
+
+  // ── Senden ──────────────────────────────────────────────
+  async function handleSend(){
+    const text = notesEl.value.trim();
+    if (!text && !audioBlob) return;
+
+    sendBtn.disabled = true;
+    burstParticles(sendBtn);
+    pulseAmbient();
+
+    let outgoingAudioUrl = null;
+    if (audioBlob) outgoingAudioUrl = merkeUrl(URL.createObjectURL(audioBlob));
+    const peaksToSend = audioPeaks;
+
+    const sentTicks = [];
+    if (text){
+      const { ticks } = addTextBubble(text, 'out');
+      sentTicks.push(ticks);
+      appendToChatHistory({ type: 'text', direction: 'out', text, ts: Date.now() });
+    }
+    if (outgoingAudioUrl){
+      const { ticks } = addVoiceBubble(outgoingAudioUrl, peaksToSend, 'out');
+      sentTicks.push(ticks);
+      const audioKey = 'a-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+      try{
+        await audioSpeichern(audioKey, audioBlob);
+        appendToChatHistory({ type: 'audio', direction: 'out', audioKey, peaks: peaksToSend, ts: Date.now() });
+      }catch(e){
+        // IndexedDB nicht verfuegbar (z.B. privater Modus): auf den alten
+        // Base64-Weg zurueckfallen, damit der Verlauf trotzdem haelt.
+        try{
+          const audioDataUrl = await blobToBase64(audioBlob);
+          appendToChatHistory({ type: 'audio', direction: 'out', audioDataUrl, peaks: peaksToSend, ts: Date.now() });
+        }catch(e2){
+          // Dann eben nur in dieser Sitzung sichtbar — der Versand
+          // selbst ist davon nicht betroffen.
+        }
+      }
+    }
+
+    // Anfrage-Body: session_id (stabil pro Nutzer/Gerät), Zeitstempel,
+    // optionaler Freitext und die Sprachnachricht als Binärdatei.
+    // Audio kann nur binär/multipart übertragen werden — deshalb FormData
+    // statt reinem JSON, session_id/timestamp/notes laufen als Textfelder mit.
+    const formData = new FormData();
+    formData.append('session_id', SESSION_ID);
+    formData.append('timestamp', new Date().toISOString());
+    formData.append('notes', text);
+    // Kundencode mitschicken, damit Fehlermeldungen nur an das
+    // verursachende Geraet gehen (Push-Zuordnung in Make).
+    formData.append('kunde_code', (typeof window.getKundenCode === 'function' ? (window.getKundenCode() || '') : ''));
+    if (audioBlob){
+      const mime = audioBlob.type || 'audio/webm';
+      const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+      const filename = `sprachnachricht.${ext}`;
+      formData.append('audio', audioBlob, filename);
+      formData.append('audio_name', filename);
+      formData.append('audio_mime', mime);
+    }
+
+    notesEl.value = '';
+    if (hoehenFrame){ cancelAnimationFrame(hoehenFrame); hoehenFrame = 0; }
+    notesEl.style.height = 'auto';
+    letzteHoehe = -1;
+    audioBlob = null;
+    audioPeaks = null;
+    attachmentChip.classList.remove('show');
+    attachmentPreview.innerHTML = '';
+
+    let typingRow = null;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
+
+    try{
+      typingRow = addTypingBubble();
+
+      // Synchron auf die Antwort von Make warten — kein separater Kanal
+      // (z.B. Telegram) mehr, die Rückmeldung kommt direkt im Response-Body.
+      const response = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok){
+        throw new Error(`Status ${response.status}`);
+      }
+
+      sentTicks.forEach(confirmTicks);
+      pulseAmbient();
+
+      // Erwartetes Format: { "reply": "<Text>" }
+      const data = await response.json();
+      const replyText = data && typeof data.reply === 'string' ? data.reply.trim() : '';
+
+      if (typingRow) typingRow.remove();
+      typingRow = null;
+
+      if (replyText){
+        addTextBubble(replyText, 'in');
+        appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now() });
+      }
+
+    }catch(err){
+      clearTimeout(timeoutId);
+      if (typingRow) typingRow.remove();
+      showError("Verarbeitung fehlgeschlagen, bitte erneut versuchen.");
+    }finally{
+      sendBtn.disabled = false;
+    }
+  }
+
+  sendBtn.addEventListener('click', async () => {
+    if (isRecording){
+      await stopRecording();
+    }
+    handleSend();
+  });
+
+  // Gespeicherten Chatverlauf (bis 48 Std. alt) beim Start wiederherstellen
+  const chatRestored = restoreChatHistory();
+
+  // ── Push-Nachrichten in den Chat einspeisen ─────────────────
+  // Der Service Worker meldet jede eingehende Push-Nachricht hierher.
+  // Ist die App offen, erscheint sie sofort als Bubble. War die App zu,
+  // liefert der Service Worker sie beim naechsten Oeffnen nach.
+  // Jede eingespeiste Nachricht wandert zusaetzlich in den 48-Std-Verlauf.
+  (function initPushInbox(){
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+    const seen = new Set();
+
+    function show(item){
+      if (!item) return;
+      const text = item.body || item.title || '';
+      if (!text) return;
+      const key = item.id || (text + '|' + (item.ts || ''));
+      if (seen.has(key)) return;
+      seen.add(key);
+      addTextBubble(text, 'in', item.ts ? new Date(item.ts) : undefined);
+      appendToChatHistory({ type: 'text', direction: 'in', text: text, ts: item.ts || Date.now() });
+    }
+
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      const msg = event.data || {};
+      if (msg.type === 'nexus-push') show(msg.payload);
+      if (msg.type === 'nexus-drain-result') (msg.items || []).forEach(show);
+    });
+
+    async function drain(){
+      try{
+        const reg = await navigator.serviceWorker.ready;
+        const target = (reg && reg.active) || navigator.serviceWorker.controller;
+        if (!target) return;
+        const ch = new MessageChannel();
+        ch.port1.onmessage = (e) => {
+          const msg = e.data || {};
+          if (msg.type === 'nexus-drain-result') (msg.items || []).forEach(show);
+        };
+        target.postMessage({ type: 'nexus-drain' }, [ch.port2]);
+      }catch(e){ /* ignorieren */ }
+    }
+
+    // Erst den gespeicherten Verlauf aufbauen, dann geparkte Pushes anhaengen,
+    // damit die Reihenfolge im Chat stimmt.
+    // Mehrfach nachfassen: Tippt der Nutzer direkt auf die Push-Meldung,
+    // ist die App u. U. schneller offen, als der Service Worker die
+    // Nachricht abgelegt hat. Doppelte faengt das seen-Set ab.
+    function drainRepeatedly(){
+      drain();
+      [800, 2500, 6000].forEach((ms) => setTimeout(drain, ms));
+    }
+
+    Promise.resolve(chatRestored).catch(() => {}).then(drainRepeatedly);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') drainRepeatedly();
+    });
+  })();
+</script>
+<script src="/nexus-sync.js"></script>
+
+</body>
+</html>

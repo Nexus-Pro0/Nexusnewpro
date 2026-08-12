@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Nexus Pro</title>
 <meta name="color-scheme" content="dark">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -148,7 +148,6 @@
   .app{
     height: 100vh;
     height: 100dvh;
-    height: calc(var(--vh, 1vh) * 100);
     display:flex;
     flex-direction:column;
     max-width: 560px;
@@ -156,15 +155,20 @@
     position: relative;
     z-index: 1;
     transform: translateY(var(--vh-offset, 0px));
-    /* Frueher lag hier "transition: height .38s". Height ist eine
-       Layout-Eigenschaft — jeder Frame reflowte die komplette Chatliste,
-       und iOS meldet die Tastaturhoehe ohnehin erst am Ende der nativen
-       Animation, sodass die Kurve nie passte. Die Tastatur wird jetzt
-       ueber --kb + transform am Composer gefahren (Compositor, kein
-       Reflow) und pro Frame aus visualViewport nachgezogen. */
-    /* will-change: height war hier wirkungslos — eine Layout-Eigenschaft
-       laesst sich nicht auf den Compositor auslagern, der Layer kostete
-       nur Speicher. */
+    /* Zwei fruehere Anlaeufe sind hier gescheitert:
+       1) "transition: height .38s" selbst animiert -- height ist eine
+          Layout-Eigenschaft, jeder Frame reflowte die komplette Chatliste.
+       2) --kb + transform am Composer, pro Frame aus visualViewport
+          nachgezogen -- sah in der Praxis aber immer noch ruckelig aus,
+          weil iOS die visualViewport-Hoehe erst kurz vor/nach Ende der
+          echten Tastaturbewegung meldet. Keine Transition-Kurve kann
+          etwas nachzeichnen, dessen Zwischenwerte nie ankommen.
+       Jetzt uebernimmt das native Resize (viewport-meta
+       interactive-widget=resizes-content): 100dvh schrumpft dann selbst,
+       animiert vom Browser im exakten Takt der echten Tastatur -- kein
+       JS-Timing-Hack mehr noetig. "contain: layout" haelt das Neu-Layout
+       auf .app beschraenkt, .chat selbst (flex:1) muss dabei nur seine
+       eigene Hoehe anpassen, nicht jede Nachricht einzeln neu berechnen. */
     contain: layout;
   }
 
@@ -256,6 +260,21 @@
   }
 
   .notif-btn.needs-attention .notif-dot{ display: block; }
+
+  /* Refresh-Button reiht sich rechts hinter Glocke + Muelltonne ein
+     (Muelltonne wird von nexus-sync.js zur Laufzeit direkt hinter
+     #notifBtn eingefuegt -- landet also automatisch VOR diesem Button).
+     Kein eigenes margin-left:auto noetig, das uebernimmt schon die
+     Glocke fuer die ganze rechte Gruppe; margin-left hier nur fuer den
+     gleichen Abstand wie zwischen Glocke und Muelltonne (siehe .nx-trash
+     in nexus-sync.js). */
+  .refresh-btn{ margin-left: 8px; }
+
+  .refresh-btn svg{ transition: transform .15s var(--ease-out); }
+
+  /* Laeuft waehrend des Nachladens, reuse der schon vorhandenen
+     @keyframes spin (siehe .spinner) statt einer zweiten Animation. */
+  .refresh-btn.loading svg{ animation: spin .6s linear infinite; }
 
   .logo-mark{
     width:34px; height:34px;
@@ -354,10 +373,12 @@
     scrollbar-color: rgba(255,255,255,0.12) transparent;
     padding-left: max(16px, env(safe-area-inset-left));
     padding-right: max(16px, env(safe-area-inset-right));
-    /* Platz fuer die Tastatur. Bewusst OHNE transition: der Wert wird
-       einmal zu Beginn gesetzt, damit die letzte Nachricht nicht hinter
-       der Tastatur verschwindet — animiert wird nur der Composer. */
-    padding-bottom: calc(12px + var(--kb, 0px));
+    /* Frueher hier zusaetzlich "calc(12px + var(--kb,0px))" fuer die
+       Tastatur -- jetzt schrumpft .app selbst nativ mit der Tastatur
+       (siehe dort), .chat (flex:1) bekommt seine kleinere Hoehe also
+       automatisch. Ein zusaetzliches Tastatur-Padding wuerde die
+       Verkleinerung doppelt zaehlen und unten unnoetig Platz freilassen. */
+    padding-bottom: 12px;
   }
 
   .chat::-webkit-scrollbar{ width: 5px; }
@@ -571,27 +592,21 @@
     position: relative;
     z-index: 1;
     opacity: 0;
-    /* Zwei Bewegungen in EINER Deklaration: der einmalige Intro-Versatz
-       (24px, faellt mit .show auf 0) und die Tastatur (--kb). Getrennte
-       Regeln wuerden sich gegenseitig ueberschreiben. */
-    transform: translateY(calc(24px - var(--kb, 0px)));
-    /* padding-bottom animierte eine Layout-Eigenschaft und reflowte dabei
-       380 ms lang die komplette Chatliste. */
+    /* Nur noch der einmalige Intro-Versatz beim ersten Laden (24px,
+       faellt mit .show auf 0). Die Tastatur braucht hier keine eigene
+       Kompensation mehr -- .app schrumpft jetzt nativ (siehe dort), der
+       Composer landet als letztes Flex-Kind von ganz allein oberhalb
+       der Tastatur, ohne eigenen Transform-Hack. */
+    transform: translateY(24px);
     transition: opacity .55s var(--ease-out), transform .55s var(--ease-out);
     padding-left: max(16px, env(safe-area-inset-left));
     padding-right: max(16px, env(safe-area-inset-right));
+    will-change: transform;
   }
 
   .composer-wrap.show{
     opacity: 1;
-    transform: translateY(calc(var(--kb, 0px) * -1));
-  }
-
-  /* Waehrend die Tastatur faehrt, wird --kb pro Frame gemessen. Eine
-     transform-Transition wuerde dabei nur hinterherlaufen und genau das
-     Nachrucken erzeugen, das behoben werden soll. */
-  .app.kb-aktiv .composer-wrap{
-    transition: opacity .55s var(--ease-out);
+    transform: translateY(0);
   }
 
   .app.kb-open .composer-wrap{
@@ -1007,6 +1022,12 @@
       </svg>
       <span class="notif-dot" id="notifDot"></span>
     </button>
+    <button class="notif-btn refresh-btn" id="refreshBtn" type="button" tabindex="-1" aria-label="Chat aktualisieren">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 12a8 8 0 0 1 13.9-5.4M20 12a8 8 0 0 1-13.9 5.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M17.5 3.5v4.5H13M6.5 20.5V16H11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
   </div>
 
   <div class="chat" id="chat">
@@ -1094,24 +1115,27 @@
 
 <script>
   // ── Mobile Keyboard-Fix ─────────────────────────────────────
-  // 100dvh reagiert in dieser eingebetteten Ansicht nicht zuverlässig
-  // auf die Tastatur (das Preview-Fenster ändert seine Größe nicht
-  // automatisch). Deshalb wird die tatsächlich sichtbare Höhe über
-  // visualViewport gemessen und als --vh gesetzt, sodass die
-  // Eingabeleiste beim Öffnen der Tastatur mit hochrutscht.
+  // Stand 12.08.: Die Tastatur wird nicht mehr per JS/CSS nachgezogen.
+  // .app nutzt jetzt natives 100dvh + viewport-meta
+  // "interactive-widget=resizes-content" — der Browser schrumpft die App
+  // selbst, exakt im Takt der echten Tastatur-Animation, ohne dass wir
+  // messen oder raten muessen. Composer und .chat brauchen dafuer keine
+  // eigene --kb-Kompensation mehr, siehe .composer-wrap / .chat oben.
   //
-  // Zwei getrennte Größen:
-  //   --vh  = Höhe des Fensters OHNE Tastatur. Ändert sich praktisch nur
-  //           bei Drehung. Damit reflowt die App beim Tippen nie.
-  //   --kb  = aktuelle Höhe der Tastatur. Verschiebt nur den Composer
-  //           per transform — reine Compositor-Arbeit, kein Layout.
+  // --vh und --kb werden hier trotzdem weiter berechnet und gesetzt
+  // (verwendet u. a. fuer --vh-offset bei Safari-Toolbar-Bewegungen).
+  // Falls interactive-widget auf einem aelteren WebKit mal nicht greift,
+  // liegen die Werte also bereit, sind aktuell aber fuer die Composer-
+  // Position selbst ungenutzt (keine CSS-Regel liest mehr --kb).
   //
-  // Früher wurde die App-Höhe selbst animiert. Height ist eine
-  // Layout-Eigenschaft: jeder Frame reflowte die gesamte Chatliste.
-  // Zusätzlich meldet iOS visualViewport erst NACH der nativen
-  // Tastatur-Animation — die CSS-Transition riet die Apple-Kurve nach
-  // und lag immer daneben. Deshalb wird während des Öffnens und
-  // Schließens pro Frame gemessen statt geraten.
+  // Warum die alten Anlaeufe nicht reichten:
+  // 1) App-Hoehe selbst per CSS-Transition animiert — Layout-Eigenschaft,
+  //    jeder Frame reflowte die gesamte Chatliste.
+  // 2) --kb + transform am Composer, pro Frame nachgezogen — sah live
+  //    trotzdem ruckelig aus, weil iOS visualViewport erst kurz vor/nach
+  //    Ende der echten Tastatur-Animation meldet, nicht kontinuierlich
+  //    waehrenddessen. Keine Transition-Kurve kann Zwischenwerte
+  //    nachzeichnen, die nie ankommen.
   const docEl = document.documentElement;
   let basisHoehe = 0;
   let letzteKb = -1;
@@ -2445,6 +2469,32 @@
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') drainRepeatedly();
     });
+
+    // ── Manueller Refresh-Button ─────────────────────────────
+    // Macht genau das, was bisher nur Schliessen+Wiederoeffnen (oder
+    // Tab-Wechsel via visibilitychange) ausgeloest hat: beim Service
+    // Worker nach geparkten Push-Nachrichten fragen. Kein voller
+    // location.reload() noetig, dafuer bleibt Scroll-Position und
+    // Verlauf unangetastet.
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn){
+      let refreshLaeuft = false;
+      refreshBtn.addEventListener('click', () => {
+        if (refreshLaeuft) return;
+        refreshLaeuft = true;
+        refreshBtn.classList.add('loading');
+        refreshBtn.disabled = true;
+        drainRepeatedly();
+        // Mindestdauer, damit der Spin auch sichtbar ist, wenn drain()
+        // (mangels neuer Nachrichten) quasi sofort durch ist — sonst
+        // wirkt der Klick wie ein Nicht-Reagieren.
+        setTimeout(() => {
+          refreshBtn.classList.remove('loading');
+          refreshBtn.disabled = false;
+          refreshLaeuft = false;
+        }, 650);
+      });
+    }
   })();
 </script>
 <script src="/nexus-sync.js"></script>

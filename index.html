@@ -171,7 +171,7 @@
        selbst (flex:1) muss dabei nur seine eigene Hoehe anpassen, nicht
        jede Nachricht einzeln neu berechnen -- die Transition unten bleibt
        dadurch trotz Layout-Eigenschaft (height) bezahlbar. */
-    transition: height .28s var(--ease-out);
+    transition: height .3s var(--ease-out);
     contain: layout;
   }
 
@@ -1160,7 +1160,29 @@
 
   // Einmal messen und schreiben. Bewusst nur bei echter Änderung, damit
   // wir nicht jeden Frame unnötig Style invalidieren.
-  function kbMessen(){
+  //
+  // Stand 15.08. (Nachbesserung "zu abgehackt"): iOS meldet die echte
+  // Tastaturhöhe während der Animation oft in 1-2 ungenauen Zwischen-
+  // schritten, nicht in einem sauberen Rutsch. Frueher wurde jede dieser
+  // Zwischenmeldungen SOFORT auf --kb geschrieben -- das hat die laufende
+  // CSS-Transition mitten in der Bewegung neu gestartet (neue Kurve ab dem
+  // aktuellen Punkt), was sich wie ein kleiner Ruckler/Hitch angefuehlt hat.
+  // Jetzt wird der rohe Messwert weiter jeden Frame aktualisiert, aber erst
+  // geschrieben, wenn er ~60ms lang stabil geblieben ist -- dadurch laeuft
+  // pro Oeffnen/Schliessen nur noch EINE durchgehende Animation.
+  let kbRohWert = 0;
+  let kbCommitTimer = 0;
+
+  function kbCommitJetzt(){
+    clearTimeout(kbCommitTimer);
+    kbCommitTimer = 0;
+    if (kbRohWert !== letzteKb){
+      letzteKb = kbRohWert;
+      docEl.style.setProperty('--kb', kbRohWert + 'px');
+    }
+  }
+
+  function kbMessen(sofort){
     const vv = window.visualViewport;
     const h = fensterHoehe();
     const offsetTop = vv ? vv.offsetTop : 0;
@@ -1168,9 +1190,14 @@
     let kb = Math.max(0, Math.round(basisHoehe - h - offsetTop));
     // Unter ~80 px ist es keine Tastatur, sondern die Adressleiste.
     if (kb < 80) kb = 0;
-    if (kb !== letzteKb){
-      letzteKb = kb;
-      docEl.style.setProperty('--kb', kb + 'px');
+    kbRohWert = kb;
+    if (kbRohWert !== letzteKb){
+      if (sofort){
+        kbCommitJetzt();
+      } else {
+        clearTimeout(kbCommitTimer);
+        kbCommitTimer = setTimeout(kbCommitJetzt, 60);
+      }
     }
     const off = Math.round(offsetTop);
     if (off !== letzterOffset){
@@ -1200,16 +1227,16 @@
 
   function setVH(){
     basisSetzen();
-    kbMessen();
+    kbMessen(true);
   }
 
   basisSetzen();
-  kbMessen();
+  kbMessen(true);
 
   window.addEventListener('orientationchange', () => {
     // Nach dem Drehen ist die Basishöhe eine andere — neu einmessen.
     basisHoehe = 0;
-    setTimeout(() => { basisSetzen(); kbMessen(); }, 250);
+    setTimeout(() => { basisSetzen(); kbMessen(true); }, 250);
   });
   window.addEventListener('resize', () => {
     // Ohne offene Tastatur darf die Basishöhe nachgeführt werden.

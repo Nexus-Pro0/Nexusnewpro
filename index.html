@@ -1165,12 +1165,24 @@
   // Tastaturhöhe während der Animation oft in 1-2 ungenauen Zwischen-
   // schritten, nicht in einem sauberen Rutsch. Frueher wurde jede dieser
   // Zwischenmeldungen SOFORT auf --kb geschrieben -- das hat die laufende
-  // CSS-Transition mitten in der Bewegung neu gestartet (neue Kurve ab dem
-  // aktuellen Punkt), was sich wie ein kleiner Ruckler/Hitch angefuehlt hat.
-  // Jetzt wird der rohe Messwert weiter jeden Frame aktualisiert, aber erst
-  // geschrieben, wenn er ~60ms lang stabil geblieben ist -- dadurch laeuft
-  // pro Oeffnen/Schliessen nur noch EINE durchgehende Animation.
+  // CSS-Transition mitten in der Bewegung neu gestartet, was sich wie ein
+  // kleiner Ruckler/Hitch angefuehlt hat.
+  //
+  // Stand 15.08., zweite Korrektur (per Bildschirmaufnahme gefunden): Der
+  // erste Debounce-Versuch hat den Timer bei JEDEM Frame neu gestartet,
+  // solange der rohe Messwert vom zuletzt GESCHRIEBENEN Wert abwich -- das
+  // ist praktisch immer der Fall, bis geschrieben wurde, und wurde alle
+  // ~16ms erneut ausgeloest. Der Timer kam dadurch fast nie zum Zug,
+  // sondern erst wenn die Mess-Schleife (kbVerfolgen) nach ihrem festen
+  // Zeitfenster komplett stoppte -- das Ergebnis war ein Composer, der bis
+  // zu ~1,5s nach dem Schliessen der Tastatur in der komprimierten Position
+  // haengen blieb, bevor er nachtraeglich zurueckgesprungen ist.
+  // Richtig: Der Timer wird nur zurueckgesetzt, wenn sich der Messwert seit
+  // dem LETZTEN FRAME veraendert hat. Bleibt er unveraendert, laeuft ein
+  // bereits laufender Timer einfach weiter und committet puenktlich nach
+  // ~60ms -- unabhaengig davon, ob die Mess-Schleife danach noch weiterlaeuft.
   let kbRohWert = 0;
+  let kbLetzterRohWert = -1;
   let kbCommitTimer = 0;
 
   function kbCommitJetzt(){
@@ -1191,14 +1203,13 @@
     // Unter ~80 px ist es keine Tastatur, sondern die Adressleiste.
     if (kb < 80) kb = 0;
     kbRohWert = kb;
-    if (kbRohWert !== letzteKb){
-      if (sofort){
-        kbCommitJetzt();
-      } else {
-        clearTimeout(kbCommitTimer);
-        kbCommitTimer = setTimeout(kbCommitJetzt, 60);
-      }
+    if (sofort){
+      kbCommitJetzt();
+    } else if (kb !== kbLetzterRohWert){
+      clearTimeout(kbCommitTimer);
+      kbCommitTimer = setTimeout(kbCommitJetzt, 60);
     }
+    kbLetzterRohWert = kb;
     const off = Math.round(offsetTop);
     if (off !== letzterOffset){
       letzterOffset = off;

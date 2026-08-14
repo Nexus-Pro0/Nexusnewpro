@@ -1660,14 +1660,17 @@
     kbScrollLoop = requestAnimationFrame(schritt);
   }
 
+  // Das eigentliche sanfte Mitgleiten des Chats waehrend der Tastatur-
+  // Animation uebernimmt nexus-sync.js (eigener, praeziser eingestellter
+  // Fokus-Listener auf #notes + Ease-Loop). Frueher stiess hier zusaetzlich
+  // ein eigener, hart getakteter scrollToBottom()-Aufruf (Frame 0 / +420ms)
+  // dazu — zwei unabhaengige Trigger auf dasselbe Ziel gleichzeitig sahen
+  // genau wie der gemeldete Ruckler aus. Deshalb bleibt kbBegleiten() hier
+  // bewusst nur noch fuer das Seiten-Scroll-Pinning (lockScrollTop)
+  // zustaendig, ohne selbst am Chat-Scroll zu ruehren.
   notesEl.addEventListener('focus', () => {
     appEl.classList.add('kb-open');
     kbBegleiten(700);
-    // Letzte Nachricht sichtbar halten: der Chat bekommt unten Platz in
-    // Höhe der Tastatur, also einmal ans Ende scrollen, sobald der
-    // Platz steht. Zweimal reicht — Anfang und Ende der Bewegung.
-    requestAnimationFrame(scrollToBottom);
-    setTimeout(scrollToBottom, 420);
   });
 
   notesEl.addEventListener('blur', () => {
@@ -2471,11 +2474,16 @@
     });
 
     // ── Manueller Refresh-Button ─────────────────────────────
-    // Macht genau das, was bisher nur Schliessen+Wiederoeffnen (oder
-    // Tab-Wechsel via visibilitychange) ausgeloest hat: beim Service
-    // Worker nach geparkten Push-Nachrichten fragen. Kein voller
-    // location.reload() noetig, dafuer bleibt Scroll-Position und
-    // Verlauf unangetastet.
+    // Fragt beim Service Worker nach geparkten Push-Nachrichten UND stoesst
+    // (falls nexus-sync.js geladen ist) einen vollen Geraete-Abgleich mit
+    // dem Server an - siehe window.nexusResync in nexus-sync.js. Vorher
+    // hat der Button NUR den Push-Pfad abgefragt: eine Antwort, die zwar
+    // schon serverseitig/im gespeicherten Verlauf stand (z. B. weil sie
+    // ueber ein anderes Geraet kam oder der direkte Webhook-Reply aus
+    // irgendeinem Grund nicht live gerendert wurde), aber nie als Push
+    // hier ankam, blieb dadurch unsichtbar bis zum kompletten Neustart der
+    // App. Kein volles location.reload() noetig, dafuer bleiben
+    // Composer-Inhalt und App-Zustand unangetastet.
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn){
       let refreshLaeuft = false;
@@ -2485,6 +2493,9 @@
         refreshBtn.classList.add('loading');
         refreshBtn.disabled = true;
         drainRepeatedly();
+        if (typeof window.nexusResync === 'function'){
+          Promise.resolve(window.nexusResync()).catch(() => {});
+        }
         // Mindestdauer, damit der Spin auch sichtbar ist, wenn drain()
         // (mangels neuer Nachrichten) quasi sofort durch ist — sonst
         // wirkt der Klick wie ein Nicht-Reagieren.

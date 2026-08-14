@@ -199,6 +199,15 @@
     }
   }
 
+  // Oeffentlicher Zugriff auf sync() fuer den manuellen Refresh-Button in
+  // index.html: gleicht mit dem Server ab UND zeichnet den Chat bei neuen
+  // Eintraegen sauber neu (inkl. Scroll-Position-Erhalt, siehe neuAufbauen).
+  // Ohne kundenCode (Zugangscode noch nicht hinterlegt) ist das ein No-op,
+  // sync() faengt das selbst ab.
+  window.nexusResync = function () {
+    return sync(true);
+  };
+
   // Chat neu zeichnen, damit die Reihenfolge stimmt. Nur die Bubbles
   // werden entfernt — der Empty-State bleibt als Element erhalten.
   var renderLaeuft = false;

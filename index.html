@@ -148,6 +148,7 @@
   .app{
     height: 100vh;
     height: 100dvh;
+    height: calc(100dvh - var(--kb, 0px));
     display:flex;
     flex-direction:column;
     max-width: 560px;
@@ -155,20 +156,22 @@
     position: relative;
     z-index: 1;
     transform: translateY(var(--vh-offset, 0px));
-    /* Zwei fruehere Anlaeufe sind hier gescheitert:
-       1) "transition: height .38s" selbst animiert -- height ist eine
-          Layout-Eigenschaft, jeder Frame reflowte die komplette Chatliste.
-       2) --kb + transform am Composer, pro Frame aus visualViewport
-          nachgezogen -- sah in der Praxis aber immer noch ruckelig aus,
-          weil iOS die visualViewport-Hoehe erst kurz vor/nach Ende der
-          echten Tastaturbewegung meldet. Keine Transition-Kurve kann
-          etwas nachzeichnen, dessen Zwischenwerte nie ankommen.
-       Jetzt uebernimmt das native Resize (viewport-meta
-       interactive-widget=resizes-content): 100dvh schrumpft dann selbst,
-       animiert vom Browser im exakten Takt der echten Tastatur -- kein
-       JS-Timing-Hack mehr noetig. "contain: layout" haelt das Neu-Layout
-       auf .app beschraenkt, .chat selbst (flex:1) muss dabei nur seine
-       eigene Hoehe anpassen, nicht jede Nachricht einzeln neu berechnen. */
+    /* Stand 15.08.: "interactive-widget=resizes-content" (unten im
+       viewport-meta) wird von iOS Safari / der installierten Home-
+       Bildschirm-App NICHT zuverlaessig beachtet -- live getestet: die
+       Tastatur oeffnet sich, .app bleibt aber ueber volle 100dvh stehen
+       und der Composer landet unsichtbar dahinter. Deshalb zieht --kb
+       (siehe kbMessen() unten, ueber visualViewport gemessen) hier wieder
+       aktiv von der App-Hoehe ab -- das ist der zuverlaessige Teil, der
+       auf jedem iOS-Geraet unabhaengig von Safari-Version funktioniert.
+       Auf Browsern, die interactive-widget bereits nativ resizen (z. B.
+       Chrome/Android), schrumpft die visualViewport-Hoehe im selben Zug
+       wie 100dvh mit -- dort bleibt --kb bei 0, keine Doppel-Kompensation.
+       "contain: layout" haelt das Neu-Layout auf .app beschraenkt, .chat
+       selbst (flex:1) muss dabei nur seine eigene Hoehe anpassen, nicht
+       jede Nachricht einzeln neu berechnen -- die Transition unten bleibt
+       dadurch trotz Layout-Eigenschaft (height) bezahlbar. */
+    transition: height .28s var(--ease-out);
     contain: layout;
   }
 

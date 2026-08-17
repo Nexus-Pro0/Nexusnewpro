@@ -857,20 +857,14 @@
 
   @keyframes spin{ to{ transform: rotate(360deg); } }
 
-  .error-banner{
-    display:none;
-    align-items:center;
-    gap:8px;
-    background: rgba(255,92,114,0.1);
-    border: 1px solid rgba(255,92,114,0.3);
+  /* Fehlermeldungen erscheinen als normale Chat-Bubble (siehe addErrorBubble)
+     statt als verschwindendes Banner — bleiben so an ihrer Stelle im
+     Verlauf stehen, auch wenn man erst spaeter wieder hinschaut. */
+  .row .bubble.error-bubble{
+    background: rgba(255,92,114,0.14);
+    border: 1px solid rgba(255,92,114,0.35);
     color: #ffc4cd;
-    font-size: 12px;
-    padding: 8px 14px;
-    border-radius: 12px;
-    margin-bottom: 8px;
   }
-
-  .error-banner.show{ display:flex; }
 
   .particle{
     position: fixed;
@@ -1076,10 +1070,6 @@
   </div>
 
   <div class="composer-wrap">
-    <div class="error-banner" id="errorBanner">
-      <span id="errorText">Beim Senden ist ein Fehler aufgetreten.</span>
-    </div>
-
     <div class="attachment-chip" id="attachmentChip">
       <div id="attachmentPreview"></div>
       <button class="chip-remove" id="removeAttachment" type="button" tabindex="-1" aria-label="Aufnahme entfernen">✕</button>
@@ -1261,11 +1251,25 @@
 
   // ── Konfiguration ─────────────────────────────────────────
   const WEBHOOK_URL = "https://hook.eu1.make.com/exdl9opobjjs1l49jglae9wqo1ihp47c";
+  // Zweiter, unabhaengiger Kanal (n8n des Partners). Bleibt leer -> kein
+  // zusaetzlicher Versand, falls die URL mal entfernt werden soll.
+  const WEBHOOK_URL_N8N = "https://nexus0.app.n8n.cloud/webhook/asg-zentrale";
   const WEBHOOK_TIMEOUT_MS = 30000;
   // Öffentlicher VAPID-Schlüssel für Web-Push (Gegenstück liegt sicher als
   // Umgebungsvariable bei Netlify, siehe send-push.js)
   const VAPID_PUBLIC_KEY = "BKKg_BlxSEL_H6ajVYtfavKfuDPMtvY4uwRoXyDyIOlGhVbSJIB4bmWURMDuEb4f-4hhogK-tqp_k5ts1vT1UGQ";
   // ──────────────────────────────────────────────────────────
+
+  // Schickt dieselben Formulardaten zusaetzlich an n8n, ohne auf die
+  // Antwort zu warten. Der Chat haengt weiterhin ausschliesslich an der
+  // Make.com-Antwort (response weiter unten) - schlaegt n8n fehl oder
+  // ist n8n nicht erreichbar, merkt der Nutzer davon nichts.
+  function sendToN8nFireAndForget(formData){
+    if (!WEBHOOK_URL_N8N) return;
+    try{
+      fetch(WEBHOOK_URL_N8N, { method: 'POST', body: formData }).catch(() => {});
+    }catch(e){ /* ignorieren */ }
+  }
 
   // ── Stabile Session-ID (ersetzt Telegram-Chat-ID) ──────────
   // Wird beim allerersten Start einmalig erzeugt und danach dauerhaft
@@ -1447,6 +1451,8 @@
         if (item.type === 'text'){
           const { ticks } = addTextBubble(item.text, item.direction, atDate);
           if (ticks) confirmTicks(ticks);
+        } else if (item.type === 'error'){
+          addErrorBubble(item.text, atDate);
         } else if (item.type === 'audio'){
           try{
             let blob = null;
@@ -1502,6 +1508,7 @@
     formData.append('session_id', SESSION_ID);
     formData.append('subscription', JSON.stringify(subscription));
     formData.append('timestamp', new Date().toISOString());
+    sendToN8nFireAndForget(formData);
     try{
       await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
     }catch(e){
@@ -1576,8 +1583,6 @@
   const attachmentChip = document.getElementById('attachmentChip');
   const attachmentPreview = document.getElementById('attachmentPreview');
   const removeAttachment = document.getElementById('removeAttachment');
-  const errorBanner = document.getElementById('errorBanner');
-  const errorText = document.getElementById('errorText');
 
   let mediaRecorder = null;
   let audioChunks = [];
@@ -1956,18 +1961,40 @@
     }
   }
 
-  let errorTimer = null;
+  // Fehler erscheinen als eigene Bubble im Chatverlauf, nicht als
+  // verschwindendes Banner — wer erst spaeter wieder hinschaut, sieht sie
+  // an der Stelle, an der sie aufgetreten sind, genau wie eine normale
+  // Nachricht. Bleibt lokal auf diesem Geraet (kein appendToChatHistory-
+  // Typ 'text'), damit sie nicht auf andere Geraete synchronisiert wird.
+  function addErrorBubble(msg, atDate){
+    hideEmptyState();
+    const row = document.createElement('div');
+    row.className = 'row in';
+    const wrap = document.createElement('div');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble error-bubble';
+    bubble.textContent = msg;
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const time = document.createElement('span');
+    time.className = 'timestamp';
+    time.textContent = formatClock(atDate || new Date());
+    meta.appendChild(time);
+    wrap.appendChild(bubble);
+    wrap.appendChild(meta);
+    row.appendChild(wrap);
+    chat.appendChild(row);
+    scrollToBottom();
+    return row;
+  }
+
   function showError(msg){
-    errorText.textContent = msg;
-    errorBanner.classList.add('show');
-    // Ohne clearTimeout blendet ein alter Timer den neuen Fehler zu frueh aus.
-    if (errorTimer) clearTimeout(errorTimer);
-    errorTimer = setTimeout(() => { errorBanner.classList.remove('show'); errorTimer = null; }, 5000);
+    addErrorBubble(msg);
+    appendToChatHistory({ type: 'error', text: msg, ts: Date.now() });
   }
 
   // ── Sprachaufnahme ──────────────────────────────────────
   async function startRecording(){
-    errorBanner.classList.remove('show');
     try{
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     }catch(err){
@@ -2407,6 +2434,7 @@
 
     try{
       typingRow = addTypingBubble();
+      sendToN8nFireAndForget(formData);
 
       // Synchron auf die Antwort von Make warten — kein separater Kanal
       // (z.B. Telegram) mehr, die Rückmeldung kommt direkt im Response-Body.
@@ -2445,6 +2473,14 @@
       sendBtn.disabled = false;
     }
   }
+
+  // Ein Tap auf "Senden" hat bisher zuerst das Textfeld (und damit die
+  // Tastatur) verlassen lassen - das Senden selbst startet zwar sofort,
+  // wirkte durch die Zuklapp-Animation der Tastatur aber verzoegert.
+  // preventDefault auf mousedown/touchstart verhindert den Fokuswechsel,
+  // die Tastatur bleibt offen und die Nachricht erscheint sofort.
+  sendBtn.addEventListener('mousedown', (ev) => ev.preventDefault());
+  sendBtn.addEventListener('touchstart', (ev) => ev.preventDefault(), { passive: false });
 
   sendBtn.addEventListener('click', async () => {
     if (isRecording){
@@ -2534,17 +2570,24 @@
         refreshBtn.classList.add('loading');
         refreshBtn.disabled = true;
         drainRepeatedly();
-        if (typeof window.nexusResync === 'function'){
-          Promise.resolve(window.nexusResync()).catch(() => {});
-        }
-        // Mindestdauer, damit der Spin auch sichtbar ist, wenn drain()
+
+        // Mindestdauer, damit der Spin auch sichtbar ist, wenn alles
         // (mangels neuer Nachrichten) quasi sofort durch ist — sonst
-        // wirkt der Klick wie ein Nicht-Reagieren.
-        setTimeout(() => {
+        // wirkt der Klick wie ein Nicht-Reagieren. Der eigentliche Abgleich
+        // wird aber tatsaechlich abgewartet (nicht nur die Mindestdauer),
+        // sonst waere ein langsamer Sync schon "fertig", bevor er es ist.
+        const mindestens = new Promise(r => setTimeout(r, 650));
+        const abgleich = (typeof window.nexusResync === 'function')
+          ? Promise.resolve(window.nexusResync()).catch(() => {
+              showError("Aktualisieren nicht vollständig — bitte erneut versuchen.");
+            })
+          : Promise.resolve();
+
+        Promise.all([abgleich, mindestens]).then(() => {
           refreshBtn.classList.remove('loading');
           refreshBtn.disabled = false;
           refreshLaeuft = false;
-        }, 650);
+        });
       });
     }
   })();

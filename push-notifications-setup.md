@@ -22,7 +22,7 @@
    installiert beim Deploy die `web-push`-Abhängigkeit aus der
    `package.json`.
 4. Nach dem Deploy ist die Funktion erreichbar unter:
-   `https://gleeful-blini-3792f0.netlify.app/.netlify/functions/send-push`
+   `https://nexusproapp.netlify.app/.netlify/functions/send-push`
 
 **Wichtig:** Die privaten Schlüssel niemals in der `index.html` selbst
 verwenden oder öffentlich teilen — nur der **öffentliche** Schlüssel
@@ -44,7 +44,7 @@ vorgesehen und unbedenklich.
    benachrichtigen könnt.
 4. Um tatsächlich eine Push-Nachricht zu senden: In Make.com ein
    HTTP-Modul einbauen, das die Netlify-Funktion aufruft:
-   - URL: `https://gleeful-blini-3792f0.netlify.app/.netlify/functions/send-push`
+   - URL: `https://nexusproapp.netlify.app/.netlify/functions/send-push`
    - Methode: POST
    - Body (JSON):
      ```json

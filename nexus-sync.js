@@ -130,7 +130,11 @@
   // ── Abgleich mit dem Server ────────────────────────────────
   var syncLaeuft = false;
 
-  async function sync(nachRendern) {
+  // erzwingen=true (nur beim manuellen Refresh-Button): rendert auch dann
+  // neu, wenn die Diff-Erkennung nichts Neues fand, und wirft Fehler nach
+  // aussen weiter, statt sie stillschweigend zu schlucken - genau wie ein
+  // kompletter Neustart der App sich verhaelt.
+  async function sync(nachRendern, erzwingen) {
     if (!kundenCode || syncLaeuft) return;
     syncLaeuft = true;
     try {
@@ -161,7 +165,10 @@
       } finally {
         if (abbruch) clearTimeout(abbruch);
       }
-      if (!res.ok) return;
+      if (!res.ok) {
+        if (erzwingen) throw new Error('chat-history Antwort: ' + res.status);
+        return;
+      }
 
       var data = await res.json();
       var server = (data && Array.isArray(data.items)) ? data.items : [];
@@ -183,7 +190,13 @@
       });
       var neu = server.filter(function (e) { return !bekannt[keyOf(e)]; });
 
-      if (!neu.length && !etwasWeg) return;
+      if (!neu.length && !etwasWeg) {
+        // Beim manuellen Refresh trotzdem neu zeichnen: falls die
+        // Diff-Erkennung mal etwas uebersieht, zeigt ein erzwungenes
+        // Neuaufbauen aus dem lokalen Speicher es trotzdem zuverlaessig an.
+        if (nachRendern && erzwingen) neuAufbauen();
+        return;
+      }
 
       // Audio-Eintraege bleiben unberuehrt, Texte werden zusammengefuehrt
       var zusammen = gefiltert.concat(neu);
@@ -193,7 +206,10 @@
       if (nachRendern) neuAufbauen();
     } catch (e) {
       // Server nicht erreichbar: die App laeuft mit dem lokalen Verlauf
-      // ganz normal weiter, beim naechsten Versuch wird nachgeholt.
+      // ganz normal weiter, beim naechsten Versuch wird nachgeholt. Beim
+      // erzwungenen manuellen Refresh soll der Aufrufer davon aber
+      // erfahren, um es dem Nutzer sichtbar zu machen.
+      if (erzwingen) throw e;
     } finally {
       syncLaeuft = false;
     }
@@ -204,8 +220,12 @@
   // Eintraegen sauber neu (inkl. Scroll-Position-Erhalt, siehe neuAufbauen).
   // Ohne kundenCode (Zugangscode noch nicht hinterlegt) ist das ein No-op,
   // sync() faengt das selbst ab.
+  // Ein zuvor haengengebliebener Sync- oder Render-Versuch darf einen
+  // bewussten manuellen Klick nicht dauerhaft blockieren.
   window.nexusResync = function () {
-    return sync(true);
+    renderLaeuft = false;
+    syncLaeuft = false;
+    return sync(true, true);
   };
 
   // Chat neu zeichnen, damit die Reihenfolge stimmt. Nur die Bubbles
@@ -269,6 +289,7 @@
         fd.append('kunde_code', kundenCode);
         fd.append('subscription', JSON.stringify(subscription));
         fd.append('timestamp', new Date().toISOString());
+        if (typeof window.sendToN8nFireAndForget === 'function') window.sendToN8nFireAndForget(fd);
         await fetch(WEBHOOK_URL, { method: 'POST', body: fd });
       } catch (e) {
         // Notfalls den alten Weg gehen, damit das Abo nicht verloren geht

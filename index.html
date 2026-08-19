@@ -1250,7 +1250,7 @@
   }
 
   // ── Konfiguration ─────────────────────────────────────────
-  const WEBHOOK_URL = "https://hook.eu1.make.com/exdl9opobjjs1l49jglae9wqo1ihp47c";
+  const WEBHOOK_URL = "https://2-29-7-148.sslip.io/webhook/inputzentrale";
   // Zweiter, unabhaengiger Kanal (n8n des Partners). Bleibt leer -> kein
   // zusaetzlicher Versand, falls die URL mal entfernt werden soll.
   const WEBHOOK_URL_N8N = "https://nexus0.app.n8n.cloud/webhook/asg-zentrale";
@@ -2474,15 +2474,18 @@
     }
   }
 
-  // Ein Tap auf "Senden" hat bisher zuerst das Textfeld (und damit die
-  // Tastatur) verlassen lassen - das Senden selbst startet zwar sofort,
-  // wirkte durch die Zuklapp-Animation der Tastatur aber verzoegert.
-  // preventDefault auf mousedown/touchstart verhindert den Fokuswechsel,
-  // die Tastatur bleibt offen und die Nachricht erscheint sofort.
-  sendBtn.addEventListener('mousedown', (ev) => ev.preventDefault());
-  sendBtn.addEventListener('touchstart', (ev) => ev.preventDefault(), { passive: false });
-
-  sendBtn.addEventListener('click', async () => {
+  // Vorherige Version: preventDefault auf touchstart hielt zwar die
+  // Tastatur offen, unterdrueckt auf iOS/vielen mobilen Browsern aber
+  // gleichzeitig das nachfolgende synthetische "click"-Event, an dem
+  // das eigentliche Senden haengt - der Button reagierte dadurch kaum
+  // noch. Fix: EIN pointerdown-Handler statt mousedown+touchstart+click.
+  // pointerdown feuert sofort bei Beruehrung (kein Warten auf touchend),
+  // preventDefault darauf verhindert weiterhin den Fokuswechsel/das
+  // Tastatur-Zuklappen, und die Sende-Logik haengt direkt mit dran -
+  // kein separates click-Event mehr noetig, das verschluckt werden koennte.
+  sendBtn.addEventListener('pointerdown', async (ev) => {
+    ev.preventDefault();
+    if (sendBtn.disabled) return;
     if (isRecording){
       await stopRecording();
     }

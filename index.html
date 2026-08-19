@@ -1996,7 +1996,12 @@
   // ── Sprachaufnahme ──────────────────────────────────────
   async function startRecording(){
     try{
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Bestehenden Stream weiterverwenden statt bei jeder Aufnahme neu
+      // anzufragen — auf iOS (v.a. als Homescreen-App) loest jede neue
+      // getUserMedia-Anfrage sonst erneut die Mikrofon-Bestaetigung aus.
+      if (!stream || stream.getAudioTracks().every(t => t.readyState === 'ended')){
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
     }catch(err){
       showError("Mikrofonzugriff verweigert oder nicht verfügbar.");
       return;
@@ -2014,7 +2019,10 @@
     });
 
     mediaRecorder.addEventListener('stop', async () => {
-      stream.getTracks().forEach(t => t.stop());
+      // Stream bewusst NICHT stoppen (Tracks bleiben offen) - wird fuer die
+      // naechste Aufnahme in dieser Sitzung wiederverwendet, siehe
+      // startRecording(). Freigabe erst beim Verlassen/Schliessen der App
+      // via 'pagehide' weiter unten.
 
       if (discardOnStop){
         audioBlob = null;
@@ -2111,6 +2119,12 @@
     audioPeaks = null;
     attachmentChip.classList.remove('show');
     attachmentPreview.innerHTML = '';
+  });
+
+  // Mikrofon erst beim tatsaechlichen Verlassen/Schliessen der App
+  // freigeben (siehe startRecording/stopRecording oben).
+  window.addEventListener('pagehide', () => {
+    if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
   });
 
   const ambient = document.getElementById('ambient');

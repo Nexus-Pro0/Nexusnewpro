@@ -1254,7 +1254,15 @@
   // Zweiter, unabhaengiger Kanal (n8n des Partners). Bleibt leer -> kein
   // zusaetzlicher Versand, falls die URL mal entfernt werden soll.
   const WEBHOOK_URL_N8N = "https://nexus0.app.n8n.cloud/webhook/asg-zentrale";
-  const WEBHOOK_TIMEOUT_MS = 30000;
+  // War 30000ms - zu knapp fuer KUNDENDATEN-Anfragen mit zwei sequenziellen
+  // KI-Klassifikationen (aeussere Intent-Erkennung + innere Aktions-
+  // Erkennung/Namenssuche), die real bis zu ~32s brauchen koennen. Die
+  // Anfrage lief dabei serverseitig trotzdem sauber durch, nur die App hat
+  // vorher abgebrochen und einen Fehler angezeigt, obwohl die Aktion
+  // (z.B. eine Notiz) am Ende erfolgreich gespeichert wurde. 60s gibt
+  // realistisch beobachteten Anfragen genug Luft, ohne den Nutzer bei
+  // einer wirklich haengenden Anfrage ewig warten zu lassen.
+  const WEBHOOK_TIMEOUT_MS = 60000;
   // Öffentlicher VAPID-Schlüssel für Web-Push (Gegenstück liegt sicher als
   // Umgebungsvariable bei Netlify, siehe send-push.js)
   const VAPID_PUBLIC_KEY = "BKKg_BlxSEL_H6ajVYtfavKfuDPMtvY4uwRoXyDyIOlGhVbSJIB4bmWURMDuEb4f-4hhogK-tqp_k5ts1vT1UGQ";

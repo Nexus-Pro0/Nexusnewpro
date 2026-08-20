@@ -463,10 +463,32 @@
     return res;
   }
 
+  // Mehrzeilige Antworten (z. B. Kundendaten mit ~10 Feldern) sollen sich
+  // zeilenweise kopieren lassen - Telefonnummer oder E-Mail einzeln, statt
+  // immer die ganze Nachricht. Dafuer bekommt jede Zeile ein eigenes
+  // Block-Element, damit der lange Druck (touchstart, siehe weiter unten)
+  // genau erkennen kann, auf welcher Zeile der Finger lag.
+  function bubbleZeilenAufbauen(bubbleEl, text) {
+    if (!bubbleEl) return;
+    var zeilen = String(text || '').split('\n');
+    if (zeilen.length <= 1) return;
+    bubbleEl.textContent = '';
+    zeilen.forEach(function (zeile) {
+      var div = document.createElement('div');
+      div.className = 'bubble-line';
+      div.textContent = zeile;
+      bubbleEl.appendChild(div);
+    });
+  }
+
   if (typeof window.addTextBubble === 'function') {
     var origText = window.addTextBubble;
     window.addTextBubble = function (text, direction, atDate) {
-      return markiere(origText(text, direction, atDate), 'text', direction, atDate, text);
+      var res = origText(text, direction, atDate);
+      try {
+        bubbleZeilenAufbauen(res && res.row && res.row.querySelector('.bubble'), text);
+      } catch (e) { /* egal */ }
+      return markiere(res, 'text', direction, atDate, text);
     };
   }
 
@@ -506,6 +528,8 @@
          das sah aus wie ein Ruckler. */
       '.chat.nx-ohne-fx .row{animation:none!important;}',
       '.row.nx-gedrueckt > div > .bubble{filter:brightness(1.18);transition:filter .12s ease;}',
+      '.bubble-line{border-radius:6px;padding:1px 4px;margin:0 -4px;transition:background .12s ease;}',
+      '.bubble-line.nx-gedrueckt{background:rgba(255,255,255,.16);}',
       '.row.nx-weg{opacity:0;transform:translateX(24px) scale(.96);transition:opacity .18s ease,transform .18s ease;}',
       '.nx-back{position:fixed;inset:0;z-index:99998;background:transparent;}',
       '.nx-menu{position:fixed;z-index:99999;min-width:168px;padding:6px;',
@@ -757,7 +781,7 @@
     } catch (e) { /* egal */ }
   }
 
-  function menuOeffnen(row, x, y) {
+  function menuOeffnen(row, x, y, line) {
     menuSchliessen();
     auswahlWeg();
     tippen();
@@ -769,9 +793,23 @@
 
     var typ = row.dataset.nxTyp || 'text';
     if (typ === 'text') {
-      menu.appendChild(knopf('Kopieren', ICON_KOPIE, false, function () {
-        kopieren(row.dataset.nxText || '');
-      }));
+      var vollText = row.dataset.nxText || '';
+      var zeilenText = line ? (line.textContent || '').trim() : '';
+      // Nur zwei Optionen anbieten, wenn die Zeile tatsaechlich nur ein
+      // Teil der Nachricht ist (mehrzeilig) - bei einzeiligen Nachrichten
+      // waere "Zeile kopieren" identisch zu "Kopieren" und nur verwirrend.
+      if (zeilenText && zeilenText !== vollText) {
+        menu.appendChild(knopf('Zeile kopieren', ICON_KOPIE, false, function () {
+          kopieren(zeilenText);
+        }));
+        menu.appendChild(knopf('Ganze Nachricht kopieren', ICON_KOPIE, false, function () {
+          kopieren(vollText);
+        }));
+      } else {
+        menu.appendChild(knopf('Kopieren', ICON_KOPIE, false, function () {
+          kopieren(vollText);
+        }));
+      }
     }
     menu.appendChild(knopf('Löschen', ICON_MUELL, true, function () {
       nachrichtLoeschen(row);
@@ -810,6 +848,7 @@
   if (chatEl) {
     var druckTimer = null;
     var druckRow = null;
+    var druckLine = null;
     var startX = 0;
     var startY = 0;
     var geoeffnet = false;
@@ -817,8 +856,10 @@
     function druckAbbrechen() {
       clearTimeout(druckTimer);
       druckTimer = null;
-      if (druckRow) druckRow.classList.remove('nx-gedrueckt');
+      if (druckLine) druckLine.classList.remove('nx-gedrueckt');
+      else if (druckRow) druckRow.classList.remove('nx-gedrueckt');
       druckRow = null;
+      druckLine = null;
     }
 
     chatEl.addEventListener('touchstart', function (ev) {
@@ -833,15 +874,22 @@
       startX = p ? p.clientX : 0;
       startY = p ? p.clientY : 0;
       druckRow = row;
+      // Bei mehrzeiligen Nachrichten (siehe bubbleZeilenAufbauen oben)
+      // steht hier die konkrete Zeile unter dem Finger - damit kann das
+      // Menue spaeter gezielt nur diese Zeile zum Kopieren anbieten.
+      druckLine = t.closest ? t.closest('.bubble-line') : null;
       geoeffnet = false;
-      row.classList.add('nx-gedrueckt');
+      if (druckLine) druckLine.classList.add('nx-gedrueckt');
+      else row.classList.add('nx-gedrueckt');
 
       druckTimer = setTimeout(function () {
         geoeffnet = true;
         var r = row.getBoundingClientRect();
-        row.classList.remove('nx-gedrueckt');
-        menuOeffnen(row, startX || (r.left + r.width / 2), startY || r.top);
+        if (druckLine) druckLine.classList.remove('nx-gedrueckt');
+        else row.classList.remove('nx-gedrueckt');
+        menuOeffnen(row, startX || (r.left + r.width / 2), startY || r.top, druckLine);
         druckRow = null;
+        druckLine = null;
         druckTimer = null;
       }, LONGPRESS_MS);
     }, { passive: true });
@@ -880,7 +928,8 @@
       var row = ev.target.closest ? ev.target.closest('.row') : null;
       if (!row || !row.dataset.nxTyp) return;
       ev.preventDefault();
-      menuOeffnen(row, ev.clientX, ev.clientY);
+      var line = ev.target.closest ? ev.target.closest('.bubble-line') : null;
+      menuOeffnen(row, ev.clientX, ev.clientY, line);
     });
 
     window.addEventListener('resize', menuSchliessen);

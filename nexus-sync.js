@@ -799,8 +799,15 @@
       // Teil der Nachricht ist (mehrzeilig) - bei einzeiligen Nachrichten
       // waere "Zeile kopieren" identisch zu "Kopieren" und nur verwirrend.
       if (zeilenText && zeilenText !== vollText) {
-        menu.appendChild(knopf('Zeile kopieren', ICON_KOPIE, false, function () {
-          kopieren(zeilenText);
+        // Zeilen aus Kundendaten & Co. haben das Format "Label: Wert"
+        // (teils mit Emoji davor, z. B. "✉️ E-Mail: max@example.com").
+        // Kopiert werden soll nur der Wert nach dem ersten Doppelpunkt,
+        // nicht das Label selbst - das ist der eigentliche Zweck dieser
+        // Option (Telefonnummer/E-Mail direkt weiterverwendbar).
+        var inhaltText = zeilenText.replace(/^[^:：]{1,40}[:：]\s*/, '');
+        if (!inhaltText) inhaltText = zeilenText;
+        menu.appendChild(knopf('Inhalt kopieren', ICON_KOPIE, false, function () {
+          kopieren(inhaltText);
         }));
         menu.appendChild(knopf('Ganze Nachricht kopieren', ICON_KOPIE, false, function () {
           kopieren(vollText);

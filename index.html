@@ -2007,12 +2007,20 @@
   // ── Sprachaufnahme ──────────────────────────────────────
   async function startRecording(){
     try{
-      // Bestehenden Stream weiterverwenden statt bei jeder Aufnahme neu
-      // anzufragen — auf iOS (v.a. als Homescreen-App) loest jede neue
-      // getUserMedia-Anfrage sonst erneut die Mikrofon-Bestaetigung aus.
-      if (!stream || stream.getAudioTracks().every(t => t.readyState === 'ended')){
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      }
+      // Fuer jede Aufnahme einen frischen Stream anfragen und danach
+      // wieder sauber stoppen (siehe stopRecording unten). Ein frueherer
+      // Versuch, den Stream ueber mehrere Aufnahmen hinweg offenzuhalten,
+      // um die iOS-Mikrofon-Bestaetigung zu sparen, hat in der Praxis
+      // nichts gebracht (iOS fragt bei dieser Web-App ohnehin bei jeder
+      // Aufnahme neu) - stattdessen aber dafuer gesorgt, dass eine
+      // Aufnahme nach einer Unterbrechung (App im Hintergrund, Sperr-
+      // bildschirm) lautlos blieb, weil iOS den alten Track dabei stumm-
+      // geschaltet hatte (readyState blieb "live", aber muted=true) und
+      // gleichzeitig das Mikrofon-Symbol faelschlich weiter "an" zeigte.
+      // Ein frischer Stream pro Aufnahme + sauberes Stoppen danach ist
+      // zuverlaessiger und raeumt das Mikrofon-Symbol zwischen den
+      // Aufnahmen zuverlaessig weg.
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     }catch(err){
       showError("Mikrofonzugriff verweigert oder nicht verfügbar.");
       return;
@@ -2030,11 +2038,6 @@
     });
 
     mediaRecorder.addEventListener('stop', async () => {
-      // Stream bewusst NICHT stoppen (Tracks bleiben offen) - wird fuer die
-      // naechste Aufnahme in dieser Sitzung wiederverwendet, siehe
-      // startRecording(). Freigabe erst beim Verlassen/Schliessen der App
-      // via 'pagehide' weiter unten.
-
       if (discardOnStop){
         audioBlob = null;
         audioPeaks = null;
@@ -2105,6 +2108,10 @@
       clearInterval(timerInterval);
       cancelAnimationFrame(liveRafId);
       if (liveAudioCtx){ liveAudioCtx.close(); liveAudioCtx = null; }
+      // Mikrofon-Tracks sofort freigeben statt erst beim Verlassen der App -
+      // sonst zeigt iOS das Mikrofon-Symbol faelschlich weiter "an", obwohl
+      // gar nicht mehr aufgenommen wird.
+      if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
       isRecording = false;
 
       recBtn.classList.remove('recording');
@@ -2132,8 +2139,9 @@
     attachmentPreview.innerHTML = '';
   });
 
-  // Mikrofon erst beim tatsaechlichen Verlassen/Schliessen der App
-  // freigeben (siehe startRecording/stopRecording oben).
+  // Sicherheitsnetz: stopRecording() gibt das Mikrofon normalerweise schon
+  // selbst frei (siehe oben) - das hier faengt nur den Fall ab, dass die
+  // App waehrend einer laufenden Aufnahme abrupt geschlossen/beendet wird.
   window.addEventListener('pagehide', () => {
     if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
   });

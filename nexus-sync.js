@@ -483,6 +483,11 @@
     zeilen.forEach(function (zeile) {
       var div = document.createElement('div');
       div.className = 'bubble-line';
+      // Eine leere Zeile (z. B. der Wochentrenner in der Trainingsplan-
+      // Uebersicht, ein "\n\n" im Text) waere als komplett leeres <div>
+      // sonst quasi unsichtbar (nur die 1px Padding-Hoehe) - eigene Klasse
+      // fuer eine deutlich sichtbare Luecke zwischen den Wochen.
+      if (zeile === '') { div.className = 'bubble-line-leer'; bubbleEl.appendChild(div); return; }
       // Nur eingehende Bot-Antworten faerben (Standort-Farbcodierung,
       // window.faerbeZahlenHtml aus index.html) - "Zeile kopieren" liest
       // weiterhin line.textContent, das bleibt bei innerHTML-Inhalt der
@@ -546,6 +551,7 @@
       '.bubble-line{border-radius:6px;padding:1px 4px;margin:0 -4px;transition:background .12s ease;',
       '  white-space:nowrap;}',
       '.bubble-line.nx-gedrueckt{background:rgba(255,255,255,.16);}',
+      '.bubble-line-leer{height:14px;}',
       '.bubble.bubble-multiline{overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0;}',
       '.row.row-multiline{max-width:94%;min-width:0;}',
       '.row.row-multiline > div{min-width:0;}',

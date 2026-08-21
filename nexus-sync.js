@@ -473,6 +473,13 @@
     var zeilen = String(text || '').split('\n');
     if (zeilen.length <= 1) return;
     bubbleEl.textContent = '';
+    // Jede Zeile (z. B. ein Tag in der Trainingsplan-/Grundplan-Uebersicht)
+    // soll immer genau eine visuelle Zeile bleiben statt bei langem Inhalt
+    // umzubrechen - dafuer white-space:nowrap (siehe stileEinfuegen) plus
+    // horizontales Scrollen auf der Bubble, falls eine Zeile zu breit ist.
+    bubbleEl.classList.add('bubble-multiline');
+    var row = bubbleEl.closest ? bubbleEl.closest('.row') : null;
+    if (row) row.classList.add('row-multiline');
     zeilen.forEach(function (zeile) {
       var div = document.createElement('div');
       div.className = 'bubble-line';
@@ -536,8 +543,12 @@
          das sah aus wie ein Ruckler. */
       '.chat.nx-ohne-fx .row{animation:none!important;}',
       '.row.nx-gedrueckt > div > .bubble{filter:brightness(1.18);transition:filter .12s ease;}',
-      '.bubble-line{border-radius:6px;padding:1px 4px;margin:0 -4px;transition:background .12s ease;}',
+      '.bubble-line{border-radius:6px;padding:1px 4px;margin:0 -4px;transition:background .12s ease;',
+      '  white-space:nowrap;}',
       '.bubble-line.nx-gedrueckt{background:rgba(255,255,255,.16);}',
+      '.bubble.bubble-multiline{overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0;}',
+      '.row.row-multiline{max-width:94%;min-width:0;}',
+      '.row.row-multiline > div{min-width:0;}',
       '.row.nx-weg{opacity:0;transform:translateX(24px) scale(.96);transition:opacity .18s ease,transform .18s ease;}',
       '.nx-back{position:fixed;inset:0;z-index:99998;background:transparent;}',
       '.nx-menu{position:fixed;z-index:99999;min-width:168px;padding:6px;',

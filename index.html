@@ -52,6 +52,8 @@
     --text:#e9edfb;
     --text-muted:#8c96b8;
     --danger:#ff5c72;
+    --essen:#ff6b6b;
+    --muelheim:#4ade80;
 
     /* Bewegungs-Tokens: eine einheitliche Kurve statt gemischtem "ease".
        "ease" ist die Browser-Standardkurve und wirkt genau deshalb billig. */
@@ -1798,6 +1800,31 @@
     return row;
   }
 
+  // Standort-Farbcodierung (Essen=Rot/Muelheim=Gruen): der Bot haengt an
+  // Trainingsplan-Zahlen direkt einen Ortsbuchstaben an (z.B. "7E+9M", ohne
+  // Leerzeichen). escapeHtml() laeuft IMMER zuerst, damit der Ersetzungs-Regex
+  // nur auf bereits sicherem Text arbeitet - kein Fall von Backend-/GPT-Text,
+  // der als HTML interpretiert wird, ausser den hier selbst erzeugten Spans.
+  function escapeHtml(str){
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function faerbeZahlenHtml(text){
+    const escaped = escapeHtml(text);
+    // Lookahead (?![a-zA-Z]) verhindert Fehltreffer wie "50EUR" oder "5Minuten" -
+    // nur ein einzelner Buchstabe E/M direkt nach Ziffern, nicht gefolgt von
+    // einem weiteren Buchstaben, zaehlt als Ortsmarkierung.
+    return escaped.replace(/(\d+)([EM])(?![a-zA-Z])/g, function(_, zahl, ort){
+      const farbe = ort === 'E' ? 'var(--essen)' : 'var(--muelheim)';
+      return '<span style="color:' + farbe + '">' + zahl + '</span>';
+    });
+  }
+
   function addTextBubble(text, direction, atDate){
     hideEmptyState();
     const row = document.createElement('div');
@@ -1805,7 +1832,11 @@
     const wrap = document.createElement('div');
     const bubble = document.createElement('div');
     bubble.className = 'bubble';
-    bubble.textContent = text;
+    if (direction === 'in'){
+      bubble.innerHTML = faerbeZahlenHtml(text);
+    } else {
+      bubble.textContent = text;
+    }
     const meta = document.createElement('div');
     meta.className = 'meta';
     const time = document.createElement('span');

@@ -468,7 +468,7 @@
   // immer die ganze Nachricht. Dafuer bekommt jede Zeile ein eigenes
   // Block-Element, damit der lange Druck (touchstart, siehe weiter unten)
   // genau erkennen kann, auf welcher Zeile der Finger lag.
-  function bubbleZeilenAufbauen(bubbleEl, text) {
+  function bubbleZeilenAufbauen(bubbleEl, text, direction) {
     if (!bubbleEl) return;
     var zeilen = String(text || '').split('\n');
     if (zeilen.length <= 1) return;
@@ -476,7 +476,15 @@
     zeilen.forEach(function (zeile) {
       var div = document.createElement('div');
       div.className = 'bubble-line';
-      div.textContent = zeile;
+      // Nur eingehende Bot-Antworten faerben (Standort-Farbcodierung,
+      // window.faerbeZahlenHtml aus index.html) - "Zeile kopieren" liest
+      // weiterhin line.textContent, das bleibt bei innerHTML-Inhalt der
+      // reine sichtbare Text ohne Tags/Buchstaben.
+      if (direction === 'in' && typeof window.faerbeZahlenHtml === 'function') {
+        div.innerHTML = window.faerbeZahlenHtml(zeile);
+      } else {
+        div.textContent = zeile;
+      }
       bubbleEl.appendChild(div);
     });
   }
@@ -486,7 +494,7 @@
     window.addTextBubble = function (text, direction, atDate) {
       var res = origText(text, direction, atDate);
       try {
-        bubbleZeilenAufbauen(res && res.row && res.row.querySelector('.bubble'), text);
+        bubbleZeilenAufbauen(res && res.row && res.row.querySelector('.bubble'), text, direction);
       } catch (e) { /* egal */ }
       return markiere(res, 'text', direction, atDate, text);
     };

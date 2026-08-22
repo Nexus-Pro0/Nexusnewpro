@@ -468,18 +468,22 @@
   // immer die ganze Nachricht. Dafuer bekommt jede Zeile ein eigenes
   // Block-Element, damit der lange Druck (touchstart, siehe weiter unten)
   // genau erkennen kann, auf welcher Zeile der Finger lag.
-  function bubbleZeilenAufbauen(bubbleEl, text, direction) {
+  function bubbleZeilenAufbauen(bubbleEl, text, direction, format) {
     if (!bubbleEl) return;
     var zeilen = String(text || '').split('\n');
     if (zeilen.length <= 1) return;
     bubbleEl.textContent = '';
-    // Jede Zeile (z. B. ein Tag in der Trainingsplan-/Grundplan-Uebersicht)
-    // soll immer genau eine visuelle Zeile bleiben statt bei langem Inhalt
-    // umzubrechen - dafuer white-space:nowrap (siehe stileEinfuegen) plus
-    // horizontales Scrollen auf der Bubble, falls eine Zeile zu breit ist.
-    bubbleEl.classList.add('bubble-multiline');
-    var row = bubbleEl.closest ? bubbleEl.closest('.row') : null;
-    if (row) row.classList.add('row-multiline');
+    // Nur bei explizit als "tabelle" markierten Antworten (z. B. Tage in
+    // der Trainingsplan-/Grundplan-Uebersicht) soll jede Zeile immer genau
+    // eine visuelle Zeile bleiben statt bei langem Inhalt umzubrechen -
+    // dafuer white-space:nowrap (siehe stileEinfuegen) plus horizontales
+    // Scrollen auf der Bubble. Normaler mehrzeiliger Text (z. B. eine
+    // Bestaetigung mit mehreren Zeilen) bricht ganz gewoehnlich um.
+    if (format === 'tabelle') {
+      bubbleEl.classList.add('bubble-multiline');
+      var row = bubbleEl.closest ? bubbleEl.closest('.row') : null;
+      if (row) row.classList.add('row-multiline');
+    }
     zeilen.forEach(function (zeile) {
       var div = document.createElement('div');
       div.className = 'bubble-line';
@@ -504,10 +508,10 @@
 
   if (typeof window.addTextBubble === 'function') {
     var origText = window.addTextBubble;
-    window.addTextBubble = function (text, direction, atDate) {
+    window.addTextBubble = function (text, direction, atDate, format) {
       var res = origText(text, direction, atDate);
       try {
-        bubbleZeilenAufbauen(res && res.row && res.row.querySelector('.bubble'), text, direction);
+        bubbleZeilenAufbauen(res && res.row && res.row.querySelector('.bubble'), text, direction, format);
       } catch (e) { /* egal */ }
       return markiere(res, 'text', direction, atDate, text);
     };
@@ -549,8 +553,12 @@
          das sah aus wie ein Ruckler. */
       '.chat.nx-ohne-fx .row{animation:none!important;}',
       '.row.nx-gedrueckt > div > .bubble{filter:brightness(1.18);transition:filter .12s ease;}',
-      '.bubble-line{border-radius:6px;padding:1px 4px;margin:0 -4px;transition:background .12s ease;',
-      '  white-space:nowrap;}',
+      '.bubble-line{border-radius:6px;padding:1px 4px;margin:0 -4px;transition:background .12s ease;}',
+      /* Nowrap+Scroll (statt normalem Zeilenumbruch) nur bei Nachrichten,
+         die dafuer explizit markiert sind (z. B. Trainingsplan-Uebersicht,
+         siehe format-Parameter in bubbleZeilenAufbauen) - normaler
+         mehrzeiliger Chat-Text soll ganz gewoehnlich umbrechen. */
+      '.bubble-multiline .bubble-line{white-space:nowrap;}',
       '.bubble-line.nx-gedrueckt{background:rgba(255,255,255,.16);}',
       '.bubble.bubble-multiline{overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0;}',
       '.row.row-multiline{max-width:94%;min-width:0;}',

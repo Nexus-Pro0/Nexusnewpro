@@ -1462,7 +1462,7 @@
       for (const item of pruned){
         const atDate = new Date(item.ts);
         if (item.type === 'text'){
-          const { ticks } = addTextBubble(item.text, item.direction, atDate);
+          const { ticks } = addTextBubble(item.text, item.direction, atDate, item.format);
           if (ticks) confirmTicks(ticks);
         } else if (item.type === 'error'){
           addErrorBubble(item.text, atDate);
@@ -2517,16 +2517,21 @@
       sentTicks.forEach(confirmTicks);
       pulseAmbient();
 
-      // Erwartetes Format: { "reply": "<Text>" }
+      // Erwartetes Format: { "reply": "<Text>", "format"?: "tabelle" }
+      // "format" kommt nur bei listenartigen Antworten (z. B. Trainingsplan-
+      // Uebersicht) mit - steuert, ob Zeilen im Chat nicht umbrechen duerfen
+      // (siehe bubbleZeilenAufbauen in nexus-sync.js). Normaler Text bleibt
+      // ohne dieses Feld und bricht ganz gewoehnlich um.
       const data = await response.json();
       const replyText = data && typeof data.reply === 'string' ? data.reply.trim() : '';
+      const replyFormat = data && typeof data.format === 'string' ? data.format : undefined;
 
       if (typingRow) typingRow.remove();
       typingRow = null;
 
       if (replyText){
-        addTextBubble(replyText, 'in');
-        appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now() });
+        addTextBubble(replyText, 'in', undefined, replyFormat);
+        appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now(), format: replyFormat });
       }
 
     }catch(err){

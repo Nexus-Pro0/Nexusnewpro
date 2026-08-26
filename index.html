@@ -1925,7 +1925,12 @@
       iconSpan.textContent = section.icon || '';
       chip.appendChild(iconSpan);
       chip.appendChild(document.createTextNode(section.title || ''));
-      chip.addEventListener('click', () => {
+      // pointerdown statt click: auf iOS unterdrueckt ein preventDefault()
+      // auf touchstart/-move (siehe Kommentar am Sende-Button weiter unten)
+      // sonst zuverlaessig das nachfolgende synthetische click-Event -
+      // der Chip haette dann auf dem iPhone einfach nicht reagiert.
+      chip.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
         if (sendBtn.disabled) return;
         chip.classList.add('picked');
         notesEl.value = 'Hilfe ' + (section.trigger || section.title || '');

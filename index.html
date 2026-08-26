@@ -479,6 +479,44 @@
 
   .hilfe-chip-icon{ font-size:17px; }
 
+  /* ── Hilfe-Detail (Kacheln mit Icon je Befehl, nach Kategorie-Auswahl) ── */
+  .hilfe-detail-list{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-top: 10px;
+  }
+
+  .hilfe-detail-item{
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    padding: 10px 12px;
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+  }
+
+  .hilfe-detail-icon{
+    font-size: 16px;
+    line-height: 1.3;
+    flex-shrink:0;
+  }
+
+  .hilfe-detail-body{ min-width:0; flex:1; }
+
+  .hilfe-detail-label{
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+  }
+
+  .hilfe-detail-cmd{
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text);
+  }
+
   .voice-player{
     display:flex;
     align-items:center;
@@ -1502,6 +1540,8 @@
         if (item.type === 'text'){
           if (item.format === 'hilfe-menu' && Array.isArray(item.sections)){
             renderHilfeMenu(item.text, item.sections, item.direction, atDate);
+          } else if (item.format === 'hilfe-detail' && Array.isArray(item.items)){
+            renderHilfeDetail(item.text, item.items, item.direction, atDate);
           } else {
             const { ticks } = addTextBubble(item.text, item.direction, atDate, item.format);
             if (ticks) confirmTicks(ticks);
@@ -1939,6 +1979,63 @@
       grid.appendChild(chip);
     });
     bubble.appendChild(grid);
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const time = document.createElement('span');
+    time.className = 'timestamp';
+    time.textContent = formatClock(atDate || new Date());
+    meta.appendChild(time);
+
+    wrap.appendChild(bubble);
+    wrap.appendChild(meta);
+    row.appendChild(wrap);
+    chat.appendChild(row);
+    scrollToBottom();
+  }
+
+  // ── Hilfe-Detail: Befehle EINER Kategorie als Kacheln mit Icon je Zeile
+  // (statt Fliesstext) - erscheint nach Antippen eines Kategorie-Chips.
+  function renderHilfeDetail(text, items, direction, atDate){
+    hideEmptyState();
+    const row = document.createElement('div');
+    row.className = `row ${direction}`;
+    const wrap = document.createElement('div');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    if (text){
+      const textEl = document.createElement('div');
+      textEl.textContent = text;
+      bubble.appendChild(textEl);
+    }
+
+    const list = document.createElement('div');
+    list.className = 'hilfe-detail-list';
+    (items || []).forEach(item => {
+      const row2 = document.createElement('div');
+      row2.className = 'hilfe-detail-item';
+
+      const iconEl = document.createElement('div');
+      iconEl.className = 'hilfe-detail-icon';
+      iconEl.textContent = item.icon || '';
+      row2.appendChild(iconEl);
+
+      const body = document.createElement('div');
+      body.className = 'hilfe-detail-body';
+      const labelEl = document.createElement('div');
+      labelEl.className = 'hilfe-detail-label';
+      labelEl.textContent = item.label || '';
+      const cmdEl = document.createElement('div');
+      cmdEl.className = 'hilfe-detail-cmd';
+      cmdEl.textContent = item.cmd || '';
+      body.appendChild(labelEl);
+      body.appendChild(cmdEl);
+      row2.appendChild(body);
+
+      list.appendChild(row2);
+    });
+    bubble.appendChild(list);
 
     const meta = document.createElement('div');
     meta.className = 'meta';
@@ -2624,13 +2721,17 @@
       const replyText = data && typeof data.reply === 'string' ? data.reply.trim() : '';
       const replyFormat = data && typeof data.format === 'string' ? data.format : undefined;
       const replySections = data && Array.isArray(data.sections) ? data.sections : undefined;
+      const replyItems = data && Array.isArray(data.items) ? data.items : undefined;
 
       if (typingRow) typingRow.remove();
       typingRow = null;
 
-      if (replyText && replyFormat === 'hilfe-menu' && replySections){
+      if (replyFormat === 'hilfe-menu' && replySections){
         renderHilfeMenu(replyText, replySections, 'in');
         appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now(), format: replyFormat, sections: replySections });
+      } else if (replyFormat === 'hilfe-detail' && replyItems){
+        renderHilfeDetail(replyText, replyItems, 'in');
+        appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now(), format: replyFormat, items: replyItems });
       } else if (replyText){
         addTextBubble(replyText, 'in', undefined, replyFormat);
         appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now(), format: replyFormat });

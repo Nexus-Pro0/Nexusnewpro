@@ -2722,6 +2722,7 @@
       const replyFormat = data && typeof data.format === 'string' ? data.format : undefined;
       const replySections = data && Array.isArray(data.sections) ? data.sections : undefined;
       const replyItems = data && Array.isArray(data.items) ? data.items : undefined;
+      const replyMessages = data && Array.isArray(data.messages) ? data.messages : undefined;
 
       if (typingRow) typingRow.remove();
       typingRow = null;
@@ -2732,6 +2733,17 @@
       } else if (replyFormat === 'hilfe-detail' && replyItems){
         renderHilfeDetail(replyText, replyItems, 'in');
         appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now(), format: replyFormat, items: replyItems });
+      } else if (replyFormat === 'multi' && replyMessages && replyMessages.length){
+        // Mehrere Trainer gleichzeitig angefragt (z. B. "Trainingsplan
+        // Uebersicht fuer Enes und Alla") -> eine eigene Bubble pro Trainer,
+        // jede einzeln im Verlauf gespeichert, statt einer zusammengewuerfelten.
+        replyMessages.forEach(msg => {
+          const msgText = msg && typeof msg.reply === 'string' ? msg.reply.trim() : '';
+          if (!msgText) return;
+          const msgFormat = msg && typeof msg.format === 'string' ? msg.format : undefined;
+          addTextBubble(msgText, 'in', undefined, msgFormat);
+          appendToChatHistory({ type: 'text', direction: 'in', text: msgText, ts: Date.now(), format: msgFormat });
+        });
       } else if (replyText){
         addTextBubble(replyText, 'in', undefined, replyFormat);
         appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now(), format: replyFormat });

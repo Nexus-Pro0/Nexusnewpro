@@ -1329,9 +1329,6 @@
 
   // ── Konfiguration ─────────────────────────────────────────
   const WEBHOOK_URL = "https://2-29-7-148.sslip.io/webhook/inputzentrale";
-  // Zweiter, unabhaengiger Kanal (n8n des Partners). Bleibt leer -> kein
-  // zusaetzlicher Versand, falls die URL mal entfernt werden soll.
-  const WEBHOOK_URL_N8N = "https://nexus0.app.n8n.cloud/webhook/asg-zentrale";
   // War 30000ms - zu knapp fuer KUNDENDATEN-Anfragen mit zwei sequenziellen
   // KI-Klassifikationen (aeussere Intent-Erkennung + innere Aktions-
   // Erkennung/Namenssuche), die real bis zu ~32s brauchen koennen. Die
@@ -1348,17 +1345,6 @@
   // Umgebungsvariable bei Netlify, siehe send-push.js)
   const VAPID_PUBLIC_KEY = "BKKg_BlxSEL_H6ajVYtfavKfuDPMtvY4uwRoXyDyIOlGhVbSJIB4bmWURMDuEb4f-4hhogK-tqp_k5ts1vT1UGQ";
   // ──────────────────────────────────────────────────────────
-
-  // Schickt dieselben Formulardaten zusaetzlich an n8n, ohne auf die
-  // Antwort zu warten. Der Chat haengt weiterhin ausschliesslich an der
-  // Make.com-Antwort (response weiter unten) - schlaegt n8n fehl oder
-  // ist n8n nicht erreichbar, merkt der Nutzer davon nichts.
-  function sendToN8nFireAndForget(formData){
-    if (!WEBHOOK_URL_N8N) return;
-    try{
-      fetch(WEBHOOK_URL_N8N, { method: 'POST', body: formData }).catch(() => {});
-    }catch(e){ /* ignorieren */ }
-  }
 
   // ── Stabile Session-ID (ersetzt Telegram-Chat-ID) ──────────
   // Wird beim allerersten Start einmalig erzeugt und danach dauerhaft
@@ -1603,7 +1589,6 @@
     formData.append('session_id', SESSION_ID);
     formData.append('subscription', JSON.stringify(subscription));
     formData.append('timestamp', new Date().toISOString());
-    sendToN8nFireAndForget(formData);
     try{
       await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
     }catch(e){
@@ -2693,7 +2678,6 @@
 
     try{
       typingRow = addTypingBubble();
-      sendToN8nFireAndForget(formData);
 
       // Synchron auf die Antwort von Make warten — kein separater Kanal
       // (z.B. Telegram) mehr, die Rückmeldung kommt direkt im Response-Body.

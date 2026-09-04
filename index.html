@@ -266,20 +266,14 @@
 
   .notif-btn.needs-attention .notif-dot{ display: block; }
 
-  /* Refresh-Button reiht sich rechts hinter Glocke + Muelltonne ein
+  /* Scroll-Bottom-Button reiht sich rechts hinter Glocke + Muelltonne ein
      (Muelltonne wird von nexus-sync.js zur Laufzeit direkt hinter
      #notifBtn eingefuegt -- landet also automatisch VOR diesem Button).
      Kein eigenes margin-left:auto noetig, das uebernimmt schon die
      Glocke fuer die ganze rechte Gruppe; margin-left hier nur fuer den
      gleichen Abstand wie zwischen Glocke und Muelltonne (siehe .nx-trash
      in nexus-sync.js). */
-  .refresh-btn{ margin-left: 8px; }
-
-  .refresh-btn svg{ transition: transform .15s var(--ease-out); }
-
-  /* Laeuft waehrend des Nachladens, reuse der schon vorhandenen
-     @keyframes spin (siehe .spinner) statt einer zweiten Animation. */
-  .refresh-btn.loading svg{ animation: spin .6s linear infinite; }
+  .scroll-bottom-btn{ margin-left: 8px; }
 
   .logo-mark{
     width:34px; height:34px;
@@ -1097,10 +1091,9 @@
       </svg>
       <span class="notif-dot" id="notifDot"></span>
     </button>
-    <button class="notif-btn refresh-btn" id="refreshBtn" type="button" tabindex="-1" aria-label="Chat aktualisieren">
+    <button class="notif-btn scroll-bottom-btn" id="scrollBottomBtn" type="button" tabindex="-1" aria-label="Nach unten scrollen">
       <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M4 12a8 8 0 0 1 13.9-5.4M20 12a8 8 0 0 1-13.9 5.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M17.5 3.5v4.5H13M6.5 20.5V16H11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12 4v14M6 13l6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
   </div>
@@ -2821,44 +2814,19 @@
       if (document.visibilityState === 'visible') drainRepeatedly();
     });
 
-    // ── Manueller Refresh-Button ─────────────────────────────
-    // Fragt beim Service Worker nach geparkten Push-Nachrichten UND stoesst
-    // (falls nexus-sync.js geladen ist) einen vollen Geraete-Abgleich mit
-    // dem Server an - siehe window.nexusResync in nexus-sync.js. Vorher
-    // hat der Button NUR den Push-Pfad abgefragt: eine Antwort, die zwar
-    // schon serverseitig/im gespeicherten Verlauf stand (z. B. weil sie
-    // ueber ein anderes Geraet kam oder der direkte Webhook-Reply aus
-    // irgendeinem Grund nicht live gerendert wurde), aber nie als Push
-    // hier ankam, blieb dadurch unsichtbar bis zum kompletten Neustart der
-    // App. Kein volles location.reload() noetig, dafuer bleiben
-    // Composer-Inhalt und App-Zustand unangetastet.
-    const refreshBtn = document.getElementById('refreshBtn');
-    if (refreshBtn){
-      let refreshLaeuft = false;
-      refreshBtn.addEventListener('click', () => {
-        if (refreshLaeuft) return;
-        refreshLaeuft = true;
-        refreshBtn.classList.add('loading');
-        refreshBtn.disabled = true;
-        drainRepeatedly();
-
-        // Mindestdauer, damit der Spin auch sichtbar ist, wenn alles
-        // (mangels neuer Nachrichten) quasi sofort durch ist — sonst
-        // wirkt der Klick wie ein Nicht-Reagieren. Der eigentliche Abgleich
-        // wird aber tatsaechlich abgewartet (nicht nur die Mindestdauer),
-        // sonst waere ein langsamer Sync schon "fertig", bevor er es ist.
-        const mindestens = new Promise(r => setTimeout(r, 650));
-        const abgleich = (typeof window.nexusResync === 'function')
-          ? Promise.resolve(window.nexusResync()).catch(() => {
-              showError("Aktualisieren nicht vollständig — bitte erneut versuchen.");
-            })
-          : Promise.resolve();
-
-        Promise.all([abgleich, mindestens]).then(() => {
-          refreshBtn.classList.remove('loading');
-          refreshBtn.disabled = false;
-          refreshLaeuft = false;
-        });
+    // ── Nach-unten-scrollen-Button ────────────────────────────
+    // Springt HART ans Ende des Chatverlaufs - ersetzt den frueheren
+    // manuellen Refresh-Button. Bewusst NICHT die globale scrollToBottom()
+    // von oben aufgerufen: nexus-sync.js ueberschreibt diesen Namen zur
+    // Laufzeit mit einer "sanft folgen"-Variante (WhatsApp-artig), die
+    // bei grossem Scroll-Abstand ABSICHTLICH gar nichts tut (siehe dort,
+    // NAH_AM_ENDE-Guard) - genau der Fall, in dem ein Nach-unten-Button
+    // gebraucht wird. Direktes chat.scrollTop setzen umgeht das und
+    // springt immer sofort ans Ende, unabhaengig von der aktuellen Position.
+    const scrollBottomBtn = document.getElementById('scrollBottomBtn');
+    if (scrollBottomBtn){
+      scrollBottomBtn.addEventListener('click', () => {
+        chat.scrollTop = chat.scrollHeight;
       });
     }
 

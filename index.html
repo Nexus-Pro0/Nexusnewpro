@@ -1580,6 +1580,7 @@
     const formData = new FormData();
     formData.append('type', 'push_subscription');
     formData.append('session_id', SESSION_ID);
+    formData.append('kunde_code', (typeof window.getKundenCode === 'function' ? (window.getKundenCode() || '') : ''));
     formData.append('subscription', JSON.stringify(subscription));
     formData.append('timestamp', new Date().toISOString());
     try{

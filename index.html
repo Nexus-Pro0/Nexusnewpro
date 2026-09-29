@@ -2099,14 +2099,28 @@
       row2.appendChild(body);
 
       if (clickable){
+        // item.complete kommt vom Backend: true = der Button-Text ist
+        // bereits ein vollstaendiger, sofort ausfuehrbarer Befehl (z.B.
+        // "Wer arbeitet heute?"). Fehlt dagegen noch eine Angabe, die nur
+        // der Nutzer kennt (Name/Datum/Uhrzeit/...), wuerde Sofort-Senden
+        // nur einen unnoetigen langsamen Agent-Umweg ausloesen, der am Ende
+        // ohnehin nur danach fragt - dann lieber sofort (ohne Netzwerk-
+        // Roundtrip) vorausfuellen und den Rest vom Nutzer ergaenzen lassen.
         // pointerdown statt click: siehe Kommentar bei den Kategorie-Chips
         // oben - auf iOS sonst kein zuverlaessiges click-Event.
         row2.addEventListener('pointerdown', (ev) => {
           ev.preventDefault();
           if (sendBtn.disabled) return;
           row2.classList.add('picked');
-          notesEl.value = item.button;
-          handleSend();
+          if (item.complete){
+            notesEl.value = item.button;
+            handleSend();
+          } else {
+            notesEl.value = item.button + ' ';
+            hoeheAnpassen();
+            notesEl.focus({ preventScroll: true });
+            notesEl.setSelectionRange(notesEl.value.length, notesEl.value.length);
+          }
         });
       }
 

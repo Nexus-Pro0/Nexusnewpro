@@ -1537,6 +1537,8 @@
             renderHilfeMenu(item.text, item.sections, item.direction, atDate);
           } else if (item.format === 'hilfe-detail' && Array.isArray(item.items)){
             renderHilfeDetail(item.text, item.items, item.direction, atDate);
+          } else if (item.format === 'confirm' && Array.isArray(item.options)){
+            renderConfirmOptions(item.text, item.options, item.direction, atDate);
           } else {
             const { ticks } = addTextBubble(item.text, item.direction, atDate, item.format);
             if (ticks) confirmTicks(ticks);
@@ -1968,6 +1970,59 @@
         if (sendBtn.disabled) return;
         chip.classList.add('picked');
         notesEl.value = 'Hilfe ' + (section.trigger || section.title || '');
+        handleSend();
+      });
+      grid.appendChild(chip);
+    });
+    bubble.appendChild(grid);
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const time = document.createElement('span');
+    time.className = 'timestamp';
+    time.textContent = formatClock(atDate || new Date());
+    meta.appendChild(time);
+
+    wrap.appendChild(bubble);
+    wrap.appendChild(meta);
+    row.appendChild(wrap);
+    chat.appendChild(row);
+    scrollToBottom();
+  }
+
+  // ── Bestaetigen/Abbrechen (und aehnliche Kurzwahl-Antworten, z.B. bei
+  // einer Mail "Senden/Nur Entwurf/Verwerfen"): der Server markiert eine
+  // Nachricht, die auf eine feste kurze Antwort wartet, mit
+  // format:'confirm' + options:[{label, send}, ...]. Tippen schickt "send"
+  // ab wie eine normale getippte Antwort ("Ja", "Abbrechen", "1", ...) -
+  // gleiches pointerdown-Sendemuster wie ueberall sonst bei Kacheln.
+  function renderConfirmOptions(text, options, direction, atDate){
+    hideEmptyState();
+    const row = document.createElement('div');
+    row.className = `row ${direction}`;
+    const wrap = document.createElement('div');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    if (text){
+      const textEl = document.createElement('div');
+      textEl.textContent = text;
+      bubble.appendChild(textEl);
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'hilfe-chip-grid';
+    (options || []).forEach(opt => {
+      if (!opt || !opt.send) return;
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'hilfe-chip';
+      chip.appendChild(document.createTextNode(opt.label || opt.send));
+      chip.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        if (sendBtn.disabled) return;
+        chip.classList.add('picked');
+        notesEl.value = opt.send;
         handleSend();
       });
       grid.appendChild(chip);
@@ -2738,6 +2793,7 @@
       const replySections = data && Array.isArray(data.sections) ? data.sections : undefined;
       const replyItems = data && Array.isArray(data.items) ? data.items : undefined;
       const replyMessages = data && Array.isArray(data.messages) ? data.messages : undefined;
+      const replyOptions = data && Array.isArray(data.options) ? data.options : undefined;
 
       if (typingRow) typingRow.remove();
       typingRow = null;
@@ -2748,6 +2804,9 @@
       } else if (replyFormat === 'hilfe-detail' && replyItems){
         renderHilfeDetail(replyText, replyItems, 'in');
         appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now(), format: replyFormat, items: replyItems });
+      } else if (replyFormat === 'confirm' && replyOptions && replyOptions.length){
+        renderConfirmOptions(replyText, replyOptions, 'in');
+        appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now(), format: replyFormat, options: replyOptions });
       } else if (replyFormat === 'multi' && replyMessages && replyMessages.length){
         // Mehrere Trainer gleichzeitig angefragt (z. B. "Trainingsplan
         // Uebersicht fuer Enes und Alla") -> eine eigene Bubble pro Trainer,

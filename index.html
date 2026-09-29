@@ -2130,7 +2130,7 @@
     const list = document.createElement('div');
     list.className = 'hilfe-detail-list';
     (items || []).forEach(item => {
-      const clickable = !!item.button;
+      const clickable = !!item.button || (Array.isArray(item.picker) && item.picker.length > 0);
       const row2 = document.createElement(clickable ? 'button' : 'div');
       row2.className = clickable ? 'hilfe-detail-item clickable' : 'hilfe-detail-item';
       if (clickable) row2.type = 'button';
@@ -2157,8 +2157,11 @@
         // Sprachnachricht aufnehmen) - Tippen sendet den Button-Text immer
         // direkt ab. Fehlt danach noch eine Angabe (Name/Datum/Uhrzeit/...),
         // stellt der Agent ganz normal seine Rueckfrage, die per Text ODER
-        // Audio beantwortet werden kann. Nur bei trainerPick zeigt sich vorher
-        // die Trainer-Auswahl (siehe renderTrainerPicker).
+        // Audio beantwortet werden kann. item.trainerPick zeigt vorher eine
+        // Trainer-Auswahl (siehe renderTrainerPicker); item.picker zeigt eine
+        // feste Auswahl (z.B. Zeitraeume) als Chips - beides vermeidet, dass
+        // ein einzelner hart kodierter Standardwert automatisch gesendet
+        // wird, ohne dass der Kunde das ausdruecklich gewaehlt hat.
         // pointerdown statt click: siehe Kommentar bei den Kategorie-Chips
         // oben - auf iOS sonst kein zuverlaessiges click-Event.
         row2.addEventListener('pointerdown', (ev) => {
@@ -2167,6 +2170,8 @@
           row2.classList.add('picked');
           if (item.trainerPick && Array.isArray(trainers) && trainers.length){
             renderTrainerPicker(item, trainers);
+          } else if (Array.isArray(item.picker) && item.picker.length){
+            renderConfirmOptions('Für welchen Zeitraum?', item.picker, 'in');
           } else {
             notesEl.value = item.button;
             handleSend();

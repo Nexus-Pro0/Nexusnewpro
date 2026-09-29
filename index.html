@@ -1098,7 +1098,7 @@
     </div>
     <div>
       <div class="brand">Nexus<span class="brand-pro">PRO</span></div>
-      <div class="status-line"><span class="dot"></span>Online</div>
+      <div class="status-line"><span class="dot"></span><span id="appLabel"></span></div>
     </div>
     <button class="notif-btn" id="notifBtn" type="button" tabindex="-1" aria-label="Benachrichtigungen aktivieren">
       <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1337,7 +1337,13 @@
   }
 
   // ── Konfiguration ─────────────────────────────────────────
+  // Pro Branch/Kunde angepasst (wie WEBHOOK_URL) - zeigt im Header + Tab-Titel,
+  // in welchem Chat man ist (wb/werkstatt/dachdecker teilen sich diesen Code).
+  const APP_LABEL = "WB Personal Training";
   const WEBHOOK_URL = "https://2-29-7-148.sslip.io/webhook/inputzentrale";
+  document.title = "Nexus Pro – " + APP_LABEL;
+  const appLabelEl = document.getElementById('appLabel');
+  if (appLabelEl) appLabelEl.textContent = APP_LABEL;
   // War 30000ms - zu knapp fuer KUNDENDATEN-Anfragen mit zwei sequenziellen
   // KI-Klassifikationen (aeussere Intent-Erkennung + innere Aktions-
   // Erkennung/Namenssuche), die real bis zu ~32s brauchen koennen. Die

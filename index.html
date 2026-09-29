@@ -491,6 +491,22 @@
     border: 1px solid var(--border);
   }
 
+  /* Tippbare Variante: Item ist ein <button>, braucht Reset der Browser-Defaults */
+  .hilfe-detail-item.clickable{
+    width:100%;
+    text-align:left;
+    font-family:inherit;
+    color:inherit;
+    cursor:pointer;
+    transition: background .15s var(--ease-out), border-color .15s var(--ease-out), transform .1s var(--ease-out);
+  }
+  .hilfe-detail-item.clickable:active{ transform: scale(0.98); }
+  .hilfe-detail-item.clickable:disabled{ cursor: default; }
+  .hilfe-detail-item.clickable.picked{
+    background: rgba(52,216,196,0.12);
+    border-color: rgba(52,216,196,0.4);
+  }
+
   .hilfe-detail-icon{
     font-size: 16px;
     line-height: 1.3;
@@ -1974,6 +1990,14 @@
 
   // ── Hilfe-Detail: Befehle EINER Kategorie als Kacheln mit Icon je Zeile
   // (statt Fliesstext) - erscheint nach Antippen eines Kategorie-Chips.
+  // Hat ein Item ein "button"-Feld (kurzer, direkt sendbarer Text ohne
+  // Platzhalter), ist die Kachel selbst antippbar: Tippen schickt diesen
+  // Text wie eine normale Nachricht ab (gleicher Sendeweg wie ueberall,
+  // gleiches pointerdown-Muster wie die Kategorie-Chips oben). Der Agent
+  // kennt dann schon die Absicht und fragt hoechstens noch nach dem, was
+  // wirklich fehlt (z.B. dem Namen) - der Nutzer tippt/spricht nur noch das.
+  // Items ohne "button" (z.B. TP-Versand, riskant/braucht genaue Angaben)
+  // bleiben reine Info-Kacheln wie bisher.
   function renderHilfeDetail(text, items, direction, atDate){
     hideEmptyState();
     const row = document.createElement('div');
@@ -1991,8 +2015,10 @@
     const list = document.createElement('div');
     list.className = 'hilfe-detail-list';
     (items || []).forEach(item => {
-      const row2 = document.createElement('div');
-      row2.className = 'hilfe-detail-item';
+      const clickable = !!item.button;
+      const row2 = document.createElement(clickable ? 'button' : 'div');
+      row2.className = clickable ? 'hilfe-detail-item clickable' : 'hilfe-detail-item';
+      if (clickable) row2.type = 'button';
 
       const iconEl = document.createElement('div');
       iconEl.className = 'hilfe-detail-icon';
@@ -2010,6 +2036,18 @@
       body.appendChild(labelEl);
       body.appendChild(cmdEl);
       row2.appendChild(body);
+
+      if (clickable){
+        // pointerdown statt click: siehe Kommentar bei den Kategorie-Chips
+        // oben - auf iOS sonst kein zuverlaessiges click-Event.
+        row2.addEventListener('pointerdown', (ev) => {
+          ev.preventDefault();
+          if (sendBtn.disabled) return;
+          row2.classList.add('picked');
+          notesEl.value = item.button;
+          handleSend();
+        });
+      }
 
       list.appendChild(row2);
     });

@@ -1542,7 +1542,7 @@
           if (item.format === 'hilfe-menu' && Array.isArray(item.sections)){
             renderHilfeMenu(item.text, item.sections, item.direction, atDate);
           } else if (item.format === 'hilfe-detail' && Array.isArray(item.items)){
-            renderHilfeDetail(item.text, item.items, item.direction, atDate);
+            renderHilfeDetail(item.text, item.items, item.direction, atDate, item.trainers);
           } else if (item.format === 'confirm' && Array.isArray(item.options)){
             renderConfirmOptions(item.text, item.options, item.direction, atDate);
           } else {
@@ -2059,7 +2059,67 @@
   // wirklich fehlt (z.B. dem Namen) - der Nutzer tippt/spricht nur noch das.
   // Items ohne "button" (z.B. TP-Versand, riskant/braucht genaue Angaben)
   // bleiben reine Info-Kacheln wie bisher.
-  function renderHilfeDetail(text, items, direction, atDate){
+  // Trainer-Auswahl als Chips statt Tippen: erscheint client-seitig ohne
+  // erneuten Server-Roundtrip (die Trainerliste kommt schon mit der
+  // hilfe-detail-Antwort mit). Je nach item.trainerPick.auto entweder
+  // sofortiges Senden (Befehl ist danach vollstaendig, z.B. Uebersicht)
+  // oder nur Vorausfuellen (Rest bleibt Rueckfrage per Tippen/Sprechen).
+  function renderTrainerPicker(item, trainers){
+    hideEmptyState();
+    const row = document.createElement('div');
+    row.className = 'row in';
+    const wrap = document.createElement('div');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    const textEl = document.createElement('div');
+    textEl.textContent = 'Für welchen Trainer?';
+    bubble.appendChild(textEl);
+
+    const grid = document.createElement('div');
+    grid.className = 'hilfe-chip-grid';
+    (trainers || []).forEach(name => {
+      if (!name) return;
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'hilfe-chip';
+      chip.appendChild(document.createTextNode(name));
+      chip.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        if (sendBtn.disabled) return;
+        chip.classList.add('picked');
+        const pick = item.trainerPick || {};
+        const join = pick.join != null ? pick.join : ' ';
+        if (pick.auto){
+          notesEl.value = item.button + join + name;
+          handleSend();
+        } else {
+          const trail = pick.trail != null ? pick.trail : ' ';
+          notesEl.value = item.button + join + name + trail;
+          hoeheAnpassen();
+          notesEl.focus({ preventScroll: true });
+          notesEl.setSelectionRange(notesEl.value.length, notesEl.value.length);
+        }
+      });
+      grid.appendChild(chip);
+    });
+    bubble.appendChild(grid);
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const time = document.createElement('span');
+    time.className = 'timestamp';
+    time.textContent = formatClock(new Date());
+    meta.appendChild(time);
+
+    wrap.appendChild(bubble);
+    wrap.appendChild(meta);
+    row.appendChild(wrap);
+    chat.appendChild(row);
+    scrollToBottom();
+  }
+
+  function renderHilfeDetail(text, items, direction, atDate, trainers){
     hideEmptyState();
     const row = document.createElement('div');
     row.className = `row ${direction}`;
@@ -2112,7 +2172,9 @@
           ev.preventDefault();
           if (sendBtn.disabled) return;
           row2.classList.add('picked');
-          if (item.complete){
+          if (item.trainerPick && Array.isArray(trainers) && trainers.length){
+            renderTrainerPicker(item, trainers);
+          } else if (item.complete){
             notesEl.value = item.button;
             handleSend();
           } else {
@@ -2814,6 +2876,7 @@
       const replyItems = data && Array.isArray(data.items) ? data.items : undefined;
       const replyMessages = data && Array.isArray(data.messages) ? data.messages : undefined;
       const replyOptions = data && Array.isArray(data.options) ? data.options : undefined;
+      const replyTrainers = data && Array.isArray(data.trainers) ? data.trainers : undefined;
 
       if (typingRow) typingRow.remove();
       typingRow = null;
@@ -2822,8 +2885,8 @@
         renderHilfeMenu(replyText, replySections, 'in');
         appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now(), format: replyFormat, sections: replySections });
       } else if (replyFormat === 'hilfe-detail' && replyItems){
-        renderHilfeDetail(replyText, replyItems, 'in');
-        appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now(), format: replyFormat, items: replyItems });
+        renderHilfeDetail(replyText, replyItems, 'in', undefined, replyTrainers);
+        appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now(), format: replyFormat, items: replyItems, trainers: replyTrainers });
       } else if (replyFormat === 'confirm' && replyOptions && replyOptions.length){
         renderConfirmOptions(replyText, replyOptions, 'in');
         appendToChatHistory({ type: 'text', direction: 'in', text: replyText, ts: Date.now(), format: replyFormat, options: replyOptions });

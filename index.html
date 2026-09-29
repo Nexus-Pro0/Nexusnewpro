@@ -2061,9 +2061,11 @@
   // bleiben reine Info-Kacheln wie bisher.
   // Trainer-Auswahl als Chips statt Tippen: erscheint client-seitig ohne
   // erneuten Server-Roundtrip (die Trainerliste kommt schon mit der
-  // hilfe-detail-Antwort mit). Je nach item.trainerPick.auto entweder
-  // sofortiges Senden (Befehl ist danach vollstaendig, z.B. Uebersicht)
-  // oder nur Vorausfuellen (Rest bleibt Rueckfrage per Tippen/Sprechen).
+  // hilfe-detail-Antwort mit). Wird danach IMMER sofort gesendet - kein
+  // Vorausfuellen (der Kunde koennte statt Tippen auch eine Sprachnachricht
+  // aufnehmen, ein vorausgefuelltes Textfeld passt dazu nicht). Fehlt noch
+  // eine Angabe (Datum/Uhrzeit/Ort/Monat), stellt der Agent ganz normal
+  // seine Rueckfrage, die der Kunde per Text ODER Audio beantworten kann.
   function renderTrainerPicker(item, trainers){
     hideEmptyState();
     const row = document.createElement('div');
@@ -2090,16 +2092,8 @@
         chip.classList.add('picked');
         const pick = item.trainerPick || {};
         const join = pick.join != null ? pick.join : ' ';
-        if (pick.auto){
-          notesEl.value = item.button + join + name;
-          handleSend();
-        } else {
-          const trail = pick.trail != null ? pick.trail : ' ';
-          notesEl.value = item.button + join + name + trail;
-          hoeheAnpassen();
-          notesEl.focus({ preventScroll: true });
-          notesEl.setSelectionRange(notesEl.value.length, notesEl.value.length);
-        }
+        notesEl.value = item.button + join + name;
+        handleSend();
       });
       grid.appendChild(chip);
     });
@@ -2159,13 +2153,12 @@
       row2.appendChild(body);
 
       if (clickable){
-        // item.complete kommt vom Backend: true = der Button-Text ist
-        // bereits ein vollstaendiger, sofort ausfuehrbarer Befehl (z.B.
-        // "Wer arbeitet heute?"). Fehlt dagegen noch eine Angabe, die nur
-        // der Nutzer kennt (Name/Datum/Uhrzeit/...), wuerde Sofort-Senden
-        // nur einen unnoetigen langsamen Agent-Umweg ausloesen, der am Ende
-        // ohnehin nur danach fragt - dann lieber sofort (ohne Netzwerk-
-        // Roundtrip) vorausfuellen und den Rest vom Nutzer ergaenzen lassen.
+        // Kein Vorausfuellen mehr (der Kunde koennte statt Tippen auch eine
+        // Sprachnachricht aufnehmen) - Tippen sendet den Button-Text immer
+        // direkt ab. Fehlt danach noch eine Angabe (Name/Datum/Uhrzeit/...),
+        // stellt der Agent ganz normal seine Rueckfrage, die per Text ODER
+        // Audio beantwortet werden kann. Nur bei trainerPick zeigt sich vorher
+        // die Trainer-Auswahl (siehe renderTrainerPicker).
         // pointerdown statt click: siehe Kommentar bei den Kategorie-Chips
         // oben - auf iOS sonst kein zuverlaessiges click-Event.
         row2.addEventListener('pointerdown', (ev) => {
@@ -2174,14 +2167,9 @@
           row2.classList.add('picked');
           if (item.trainerPick && Array.isArray(trainers) && trainers.length){
             renderTrainerPicker(item, trainers);
-          } else if (item.complete){
+          } else {
             notesEl.value = item.button;
             handleSend();
-          } else {
-            notesEl.value = item.button + ' ';
-            hoeheAnpassen();
-            notesEl.focus({ preventScroll: true });
-            notesEl.setSelectionRange(notesEl.value.length, notesEl.value.length);
           }
         });
       }

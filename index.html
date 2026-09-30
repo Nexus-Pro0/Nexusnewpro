@@ -2863,6 +2863,10 @@
       // (siehe bubbleZeilenAufbauen in nexus-sync.js). Normaler Text bleibt
       // ohne dieses Feld und bricht ganz gewoehnlich um.
       const data = await response.json();
+      // Server lehnt den Zugangscode ab -> gespeicherten Code verwerfen, Eingabefenster zeigen
+      if (data && data.zugang_abgelehnt === true && typeof window.nexusCodeZuruecksetzen === 'function'){
+        window.nexusCodeZuruecksetzen();
+      }
       const replyText = data && typeof data.reply === 'string' ? data.reply.trim() : '';
       const replyFormat = data && typeof data.format === 'string' ? data.format : undefined;
       const replySections = data && Array.isArray(data.sections) ? data.sections : undefined;

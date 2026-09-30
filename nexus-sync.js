@@ -1037,8 +1037,11 @@
   trashKnopfEinbauen();
 
   // ── 8. Abfrage-Overlay beim ersten Start ───────────────────
-  function overlayZeigen() {
+  function overlayZeigen(hinweis) {
+    // Nie zwei Fenster uebereinander (z. B. wenn mehrere Antworten hintereinander abgelehnt werden)
+    if (document.getElementById('nx-code-overlay')) return;
     var back = document.createElement('div');
+    back.id = 'nx-code-overlay';
     back.setAttribute('style', [
       'position:fixed', 'inset:0', 'z-index:99999',
       'background:rgba(8,10,20,.92)', 'backdrop-filter:blur(6px)',
@@ -1076,6 +1079,7 @@
 
     var fehler = document.createElement('div');
     fehler.setAttribute('style', 'font-size:12px;color:#ff8b8b;min-height:16px;margin-bottom:10px');
+    if (hinweis) fehler.textContent = hinweis;
 
     var btn = document.createElement('button');
     btn.type = 'button';
@@ -1163,6 +1167,17 @@
       stoppeIntervall();
     }
   });
+
+  // Der Server hat den Zugangscode abgelehnt (falsch getippt oder nicht
+  // freigeschaltet): gespeicherten Code verwerfen und das Eingabefenster
+  // wieder zeigen, damit sich das Geraet selbst korrigieren kann. Wird aus
+  // index.html aufgerufen, wenn die Antwort zugang_abgelehnt:true enthaelt.
+  window.nexusCodeZuruecksetzen = function () {
+    try { localStorage.removeItem(CODE_KEY); } catch (e) { /* privater Modus */ }
+    kundenCode = null;
+    stoppeIntervall();
+    overlayZeigen('Der bisherige Code wurde nicht akzeptiert. Bitte neu eingeben.');
+  };
 
   if (!kundenCode) {
     overlayZeigen();

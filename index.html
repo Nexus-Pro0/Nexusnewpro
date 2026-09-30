@@ -1955,6 +1955,11 @@
       // der Chip haette dann auf dem iPhone einfach nicht reagiert.
       chip.addEventListener('pointerdown', (ev) => {
         ev.preventDefault();
+        if (section.url){
+          chip.classList.add('picked');
+          window.open(section.url, '_blank');
+          return;
+        }
         if (sendBtn.disabled) return;
         chip.classList.add('picked');
         notesEl.value = 'Hilfe ' + (section.trigger || section.title || '');

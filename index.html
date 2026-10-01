@@ -458,6 +458,7 @@
     font-size: 12px;
     font-weight:600;
     text-align:center;
+    text-decoration:none;
     cursor:pointer;
     transition: background .15s var(--ease-out), border-color .15s var(--ease-out), transform .1s var(--ease-out);
   }
@@ -1941,30 +1942,38 @@
     const grid = document.createElement('div');
     grid.className = 'hilfe-chip-grid';
     (sections || []).forEach(section => {
-      const chip = document.createElement('button');
-      chip.type = 'button';
+      const chip = document.createElement(section.url ? 'a' : 'button');
       chip.className = 'hilfe-chip';
       const iconSpan = document.createElement('span');
       iconSpan.className = 'hilfe-chip-icon';
       iconSpan.textContent = section.icon || '';
       chip.appendChild(iconSpan);
       chip.appendChild(document.createTextNode(section.title || ''));
-      // pointerdown statt click: auf iOS unterdrueckt ein preventDefault()
-      // auf touchstart/-move (siehe Kommentar am Sende-Button weiter unten)
-      // sonst zuverlaessig das nachfolgende synthetische click-Event -
-      // der Chip haette dann auf dem iPhone einfach nicht reagiert.
-      chip.addEventListener('pointerdown', (ev) => {
-        ev.preventDefault();
-        if (section.url){
+      if (section.url){
+        // Echter <a>-Link statt window.open() aus einem Event-Handler: ein
+        // via pointerdown/preventDefault() ausgeloestes window.open() wird
+        // von manchen Browsern (v. a. Safari/iOS) als Popup geblockt, weil
+        // das nicht als vertrauenswuerdige Nutzergeste fuer eine neue Seite
+        // gilt - inkonsistent und ohne sichtbaren Fehler fuer den Nutzer.
+        // Eine echte Link-Navigation unterliegt dieser Pruefung nicht.
+        chip.href = section.url;
+        chip.target = '_blank';
+        chip.rel = 'noopener';
+        chip.addEventListener('click', () => chip.classList.add('picked'));
+      } else {
+        chip.type = 'button';
+        // pointerdown statt click: auf iOS unterdrueckt ein preventDefault()
+        // auf touchstart/-move (siehe Kommentar am Sende-Button weiter unten)
+        // sonst zuverlaessig das nachfolgende synthetische click-Event -
+        // der Chip haette dann auf dem iPhone einfach nicht reagiert.
+        chip.addEventListener('pointerdown', (ev) => {
+          ev.preventDefault();
+          if (sendBtn.disabled) return;
           chip.classList.add('picked');
-          window.open(section.url, '_blank');
-          return;
-        }
-        if (sendBtn.disabled) return;
-        chip.classList.add('picked');
-        notesEl.value = 'Hilfe ' + (section.trigger || section.title || '');
-        handleSend();
-      });
+          notesEl.value = 'Hilfe ' + (section.trigger || section.title || '');
+          handleSend();
+        });
+      }
       grid.appendChild(chip);
     });
     bubble.appendChild(grid);

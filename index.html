@@ -1176,6 +1176,12 @@
           <div class="rec-wave" id="recLiveWave"></div>
         </div>
       </div>
+      <button class="icon-btn attach" id="attachBtn" type="button" tabindex="-1" aria-label="Kontoauszug prüfen" title="Kontoauszug prüfen">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.9-8.9a3.3 3.3 0 0 1 4.7 4.7l-8.9 8.9a1.7 1.7 0 0 1-2.4-2.4l8.2-8.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <input type="file" id="kontoauszugInput" accept=".csv,text/csv,text/plain" hidden>
       <button class="icon-btn mic" id="recBtn" type="button" tabindex="-1" aria-label="Sprachnachricht aufnehmen">
         <span class="ring"></span>
         <svg id="micIcon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -2911,6 +2917,73 @@
       sendBtn.disabled = false;
     }
   }
+
+  // ── Kontoauszug pruefen ─────────────────────────────────────
+  // Büroklammer-Knopf: DKB-Umsatzliste (CSV) hochladen, der Server liefert
+  // einen reinen Hinweisbericht (nur lesend, Datei wird nicht gespeichert).
+  const KONTOAUSZUG_URL = WEBHOOK_URL.replace(/inputzentrale$/, 'kontoauszug');
+  const attachBtn = document.getElementById('attachBtn');
+  const kontoInput = document.getElementById('kontoauszugInput');
+
+  async function sendKontoauszug(file){
+    if (!/\.csv$/i.test(file.name)){
+      showError("Bitte die Umsatzliste als CSV-Datei auswählen.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024){
+      showError("Die Datei ist zu groß (maximal 5 MB).");
+      return;
+    }
+    if (!window.confirm('Kontoauszug "' + file.name + '" prüfen lassen?\nDie Datei wird nur ausgewertet und nicht gespeichert.')) return;
+
+    attachBtn.disabled = true;
+    pulseAmbient();
+    const label = '📄 Kontoauszug zur Prüfung: ' + file.name;
+    const { ticks } = addTextBubble(label, 'out');
+    appendToChatHistory({ type: 'text', direction: 'out', text: label, ts: Date.now() });
+
+    const formData = new FormData();
+    formData.append('session_id', SESSION_ID);
+    formData.append('timestamp', new Date().toISOString());
+    formData.append('kunde_code', (typeof window.getKundenCode === 'function' ? (window.getKundenCode() || '') : ''));
+    formData.append('datei', file, file.name);
+
+    let typingRow = null;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
+    try{
+      typingRow = addTypingBubble();
+      const response = await fetch(KONTOAUSZUG_URL, { method: 'POST', body: formData, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!response.ok) throw new Error('Status ' + response.status);
+      confirmTicks(ticks);
+      const data = await response.json();
+      if (data && data.zugang_abgelehnt === true && typeof window.nexusCodeZuruecksetzen === 'function'){
+        window.nexusCodeZuruecksetzen();
+      }
+      if (typingRow) typingRow.remove();
+      typingRow = null;
+      const msgs = (data && data.format === 'multi' && Array.isArray(data.messages)) ? data.messages : [data];
+      msgs.forEach(msg => {
+        const t = msg && typeof msg.reply === 'string' ? msg.reply.trim() : '';
+        if (!t) return;
+        addTextBubble(t, 'in');
+        appendToChatHistory({ type: 'text', direction: 'in', text: t, ts: Date.now() });
+      });
+    }catch(err){
+      clearTimeout(timeoutId);
+      if (typingRow) typingRow.remove();
+      showError("Die Prüfung ist fehlgeschlagen, bitte erneut versuchen.");
+    }finally{
+      attachBtn.disabled = false;
+    }
+  }
+
+  attachBtn.addEventListener('click', () => { kontoInput.value = ''; kontoInput.click(); });
+  kontoInput.addEventListener('change', () => {
+    const f = kontoInput.files && kontoInput.files[0];
+    if (f) sendKontoauszug(f);
+  });
 
   // Vorherige Version: preventDefault auf touchstart hielt zwar die
   // Tastatur offen, unterdrueckt auf iOS/vielen mobilen Browsern aber

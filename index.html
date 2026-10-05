@@ -436,6 +436,51 @@
     padding: 10px 14px;
   }
 
+  /* ── Kontoauszug-Pruefung: Uebersicht + farbige Rubriken ── */
+  .row.ka-wide{ max-width:94%; width:94%; }
+  .row.ka-wide > div{ flex:1; min-width:0; }
+  .ka-title{ font-family:'Sora',system-ui,sans-serif; font-weight:600; font-size:16px; }
+  .ka-sub{ font-size:12px; color:var(--text-muted); margin-top:2px; }
+  .ka-kpis{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+  .ka-kpi{ background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-sm); padding:9px 11px; }
+  .ka-kpi.wide{ grid-column:1 / -1; }
+  .ka-kpi-l{ font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-muted); }
+  .ka-kpi-v{ font-size:16px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:2px; }
+  .ka-kpi.plus .ka-kpi-v{ color:var(--accent-c); }
+  .ka-kpi.minus .ka-kpi-v{ color:var(--danger); }
+  .ka-kpi-h{ font-size:11.5px; color:var(--text-muted); margin-top:2px; }
+  .ka-lead{ font-size:13px; color:var(--text-muted); margin:14px 0 8px; }
+  .ka-chips{ display:flex; flex-direction:column; gap:8px; }
+  .ka-note{ font-size:11.5px; color:var(--text-muted); margin-top:12px; }
+  [data-ton="rot"]{ --ka-ton:#ff5c72; --ka-ton-bg:rgba(255,92,114,0.16); }
+  [data-ton="gelb"]{ --ka-ton:#ffc857; --ka-ton-bg:rgba(255,200,87,0.16); }
+  [data-ton="blau"]{ --ka-ton:#7c93ff; --ka-ton-bg:rgba(124,147,255,0.18); }
+  [data-ton="gruen"]{ --ka-ton:#34d8c4; --ka-ton-bg:rgba(52,216,196,0.16); }
+  [data-ton="grau"]{ --ka-ton:#9aa5c8; --ka-ton-bg:rgba(154,165,200,0.16); }
+  .ka-chip{
+    display:flex; align-items:center; gap:10px; width:100%;
+    padding:11px 12px; border-radius:var(--r-sm);
+    background:var(--surface-2); border:1px solid var(--border); border-left:4px solid var(--ka-ton);
+    color:var(--text); font-family:inherit; font-size:14px; font-weight:600; text-align:left; cursor:pointer;
+    transition:transform .1s var(--ease-out), opacity .15s var(--ease-out);
+  }
+  .ka-chip:active{ transform:scale(0.98); }
+  .ka-chip.picked{ opacity:.65; }
+  .ka-chip-icon{ font-size:17px; }
+  .ka-chip-n{ margin-left:auto; min-width:28px; text-align:center; padding:2px 9px; border-radius:999px; background:var(--ka-ton-bg); color:var(--ka-ton); font-size:13px; font-variant-numeric:tabular-nums; }
+  .ka-chip.leer .ka-chip-n{ background:rgba(255,255,255,0.06); color:var(--text-muted); }
+  .ka-head{ display:flex; align-items:center; gap:8px; padding-bottom:9px; margin-bottom:4px; border-bottom:2px solid var(--ka-ton); font-weight:600; font-size:15px; }
+  .ka-head-n{ margin-left:auto; padding:2px 10px; border-radius:999px; background:var(--ka-ton-bg); color:var(--ka-ton); font-size:13px; }
+  .ka-teil{ font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ka-ton); margin:14px 0 2px; font-weight:600; }
+  .ka-row{ display:grid; grid-template-columns:1fr auto; gap:1px 12px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+  .ka-row:last-child{ border-bottom:none; }
+  .ka-name{ font-weight:600; font-size:14px; min-width:0; overflow-wrap:anywhere; }
+  .ka-bet{ font-weight:600; font-size:14px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .ka-bet.minus{ color:var(--danger); }
+  .ka-bet.plus{ color:var(--accent-c); }
+  .ka-info{ grid-column:1 / -1; font-size:12px; color:var(--text-muted); overflow-wrap:anywhere; }
+  .ka-leer{ color:var(--accent-c); font-size:14px; padding:8px 0 2px; }
+
   /* ── Hilfe-Reiter (Kategorie-Chips innerhalb einer Bot-Bubble) ── */
   .hilfe-chip-grid{
     display:grid;
@@ -2919,11 +2964,117 @@
   }
 
   // ── Kontoauszug pruefen ─────────────────────────────────────
-  // Büroklammer-Knopf: DKB-Umsatzliste (CSV) hochladen, der Server liefert
-  // einen reinen Hinweisbericht (nur lesend, Datei wird nicht gespeichert).
+  // Bueroklammer-Knopf: DKB-Umsatzliste (CSV) hochladen. Der Server liefert
+  // einen reinen Hinweisbericht (nur lesend, Datei wird nicht gespeichert);
+  // die App zeigt erst eine Uebersicht und je Rubrik einen Knopf.
+  // DATENSCHUTZ: Nichts davon geht in den Chatverlauf (kein
+  // appendToChatHistory) - der wird auf den Netlify-Server synchronisiert.
+  // Uebersicht und Rubriken leben nur in dieser Ansicht, nach dem Neuladen
+  // sind sie weg. Auch der Dateiname kommt nie in einen Text-Eintrag (er
+  // enthaelt die IBAN).
   const KONTOAUSZUG_URL = WEBHOOK_URL.replace(/inputzentrale$/, 'kontoauszug');
   const attachBtn = document.getElementById('attachBtn');
   const kontoInput = document.getElementById('kontoauszugInput');
+  const euroFormat = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+  function euro(n){ return euroFormat.format(Number(n) || 0); }
+
+  function kaEl(tag, cls, text){
+    const el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text !== undefined && text !== null) el.textContent = text;
+    return el;
+  }
+
+  function kaBubble(extraClass){
+    hideEmptyState();
+    const row = kaEl('div', 'row in ka-wide');
+    const wrap = document.createElement('div');
+    const bubble = kaEl('div', 'bubble ' + (extraClass || ''));
+    const meta = kaEl('div', 'meta');
+    meta.appendChild(kaEl('span', 'timestamp', formatClock(new Date())));
+    wrap.appendChild(bubble);
+    wrap.appendChild(meta);
+    row.appendChild(wrap);
+    chat.appendChild(row);
+    return { row, bubble };
+  }
+
+  function renderKontoauszugDetail(section){
+    const { row, bubble } = kaBubble('ka-bubble');
+    bubble.dataset.ton = section.ton || 'grau';
+    const head = kaEl('div', 'ka-head');
+    head.appendChild(kaEl('span', '', (section.icon || '') + ' ' + (section.titel || '')));
+    head.appendChild(kaEl('span', 'ka-head-n', String(section.anzahl || 0)));
+    bubble.appendChild(head);
+    let gesamt = 0;
+    (section.teile || []).forEach(teil => {
+      const zeilen = (teil && teil.zeilen) || [];
+      if (!zeilen.length) return;
+      gesamt += zeilen.length;
+      if (teil.titel) bubble.appendChild(kaEl('div', 'ka-teil', teil.titel));
+      zeilen.forEach(z => {
+        const r = kaEl('div', 'ka-row');
+        r.appendChild(kaEl('div', 'ka-name', z.name || ''));
+        const b = Number(z.betrag) || 0;
+        r.appendChild(kaEl('div', 'ka-bet ' + (b < 0 ? 'minus' : 'plus'), euro(b)));
+        if (z.info) r.appendChild(kaEl('div', 'ka-info', z.info));
+        bubble.appendChild(r);
+      });
+    });
+    if (!gesamt) bubble.appendChild(kaEl('div', 'ka-leer', '✓ ' + (section.leer || 'Nichts Auffälliges.')));
+    scrollToBottom();
+    return row;
+  }
+
+  function renderKontoauszugUebersicht(data){
+    const u = data.uebersicht || {};
+    const { bubble } = kaBubble('ka-bubble');
+    bubble.appendChild(kaEl('div', 'ka-title', '📊 Kontoauszug geprüft'));
+    bubble.appendChild(kaEl('div', 'ka-sub', (u.zeitraum ? u.zeitraum + ' · ' : '') + (u.buchungen || 0) + ' Buchungen'));
+
+    const kpis = kaEl('div', 'ka-kpis');
+    const kpi = (label, wert, cls, hinweis, wide) => {
+      const k = kaEl('div', 'ka-kpi ' + (cls || '') + (wide ? ' wide' : ''));
+      k.appendChild(kaEl('div', 'ka-kpi-l', label));
+      k.appendChild(kaEl('div', 'ka-kpi-v', wert));
+      if (hinweis) k.appendChild(kaEl('div', 'ka-kpi-h', hinweis));
+      return k;
+    };
+    kpis.appendChild(kpi('Eingänge', euro(u.eingaenge && u.eingaenge.summe), 'plus', (u.eingaenge ? u.eingaenge.n : 0) + ' Buchungen'));
+    kpis.appendChild(kpi('Ausgänge', euro(u.ausgaenge && u.ausgaenge.summe), 'minus', (u.ausgaenge ? u.ausgaenge.n : 0) + ' Buchungen'));
+    const saldoOhne = u.intern ? u.saldoOhneIntern : u.saldo;
+    kpis.appendChild(kpi('Saldo', euro(u.saldo), (u.saldo || 0) < 0 ? 'minus' : 'plus',
+      u.intern ? 'ohne eigene Überträge (' + euro(u.intern.summe) + '): ' + euro(saldoOhne) : '', true));
+    if (u.kontostand) kpis.appendChild(kpi('Kontostand lt. Datei', u.kontostand, '', '', true));
+    bubble.appendChild(kpis);
+
+    bubble.appendChild(kaEl('div', 'ka-lead', 'Was möchtest du sehen?'));
+    const chips = kaEl('div', 'ka-chips');
+    const shown = {};
+    (data.sections || []).forEach(section => {
+      const chip = kaEl('button', 'ka-chip' + (!section.anzahl ? ' leer' : ''));
+      chip.type = 'button';
+      chip.dataset.ton = section.ton || 'grau';
+      chip.appendChild(kaEl('span', 'ka-chip-icon', section.icon || ''));
+      chip.appendChild(kaEl('span', '', section.titel || ''));
+      chip.appendChild(kaEl('span', 'ka-chip-n', String(section.anzahl || 0)));
+      // pointerdown wie bei den Hilfe-Kacheln (iOS schluckt sonst das click)
+      chip.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        chip.classList.add('picked');
+        const alt = shown[section.id];
+        if (alt && alt.isConnected){
+          alt.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+        shown[section.id] = renderKontoauszugDetail(section);
+      });
+      chips.appendChild(chip);
+    });
+    bubble.appendChild(chips);
+    bubble.appendChild(kaEl('div', 'ka-note', 'Nur ein Hinweisbericht zum Nachschauen. Es wurde nichts geändert und nichts gespeichert. Beim Neuladen verschwindet die Ansicht.'));
+    scrollToBottom();
+  }
 
   async function sendKontoauszug(file){
     if (!/\.csv$/i.test(file.name)){
@@ -2938,9 +3089,8 @@
 
     attachBtn.disabled = true;
     pulseAmbient();
-    const label = '📄 Kontoauszug zur Prüfung: ' + file.name;
-    const { ticks } = addTextBubble(label, 'out');
-    appendToChatHistory({ type: 'text', direction: 'out', text: label, ts: Date.now() });
+    // bewusst NICHT im Verlauf gespeichert (siehe Kommentar oben), kein Dateiname
+    const { ticks } = addTextBubble('📄 Kontoauszug zur Prüfung hochgeladen', 'out');
 
     const formData = new FormData();
     formData.append('session_id', SESSION_ID);
@@ -2963,13 +3113,12 @@
       }
       if (typingRow) typingRow.remove();
       typingRow = null;
-      const msgs = (data && data.format === 'multi' && Array.isArray(data.messages)) ? data.messages : [data];
-      msgs.forEach(msg => {
-        const t = msg && typeof msg.reply === 'string' ? msg.reply.trim() : '';
-        if (!t) return;
-        addTextBubble(t, 'in');
-        appendToChatHistory({ type: 'text', direction: 'in', text: t, ts: Date.now() });
-      });
+      if (data && data.format === 'kontoauszug' && Array.isArray(data.sections)){
+        renderKontoauszugUebersicht(data);
+      } else {
+        const t = data && typeof data.reply === 'string' ? data.reply.trim() : '';
+        if (t) addTextBubble(t, 'in');
+      }
     }catch(err){
       clearTimeout(timeoutId);
       if (typingRow) typingRow.remove();

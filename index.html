@@ -2836,7 +2836,7 @@
   let offeneRueckfrage = null; // { vorlage, muster, sticky, ts }
   // Nur reine Zeitraum-Antworten ("diesen monat", "in den naechsten 4 monaten") - ein ganzer
   // Satz oder Woerter wie "Montag" passen bewusst NICHT und laufen normal weiter.
-  const ZEITRAUM_MUSTER = '^(?=.*(?:tag|woche|monat|quartal|jahr))(?:\\s*(?:in|für|fuer|bis|ab|von|innerhalb|nur|bitte|und|noch|den|dem|der|die|das|des|ende|diesen|diesem|dieses|diese|letzten|letzte|letzter|nächsten|naechsten|nächste|naechste|nächstem|nächstes|naechstes|kommenden|kommende|vergangenen|vorigen|\\d+|ein|einen|einem|eine|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn|zwölf|zwoelf|tage|tagen|tag|wochen|woche|monate|monaten|monats|monat|quartale|quartalen|quartal|quartals|jahre|jahren|jahres|jahr)\\b[.,!]?)+\\s*$';
+  const ZEITRAUM_MUSTER = '^(?=.*(?:tag|woche|monat|quartal|jahr|januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember|\\d{4}))(?:\\s*(?:in|im|anfang|mitte|januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember|für|fuer|bis|ab|von|innerhalb|nur|bitte|und|noch|den|dem|der|die|das|des|ende|diesen|diesem|dieses|diese|letzten|letzte|letzter|nächsten|naechsten|nächste|naechste|nächstem|nächstes|naechstes|kommenden|kommende|vergangenen|vorigen|\\d+|ein|einen|einem|eine|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn|zwölf|zwoelf|tage|tagen|tag|wochen|woche|monate|monaten|monats|monat|quartale|quartalen|quartal|quartals|jahre|jahren|jahres|jahr)\\b[.,!]?)+\\s*$';
   function merkeRueckfrage(vorlage, muster, sticky){
     offeneRueckfrage = vorlage ? { vorlage, muster: muster || '', sticky: !!sticky, ts: Date.now() } : null;
   }

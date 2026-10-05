@@ -2079,6 +2079,7 @@
         ev.preventDefault();
         if (sendBtn.disabled) return;
         chip.classList.add('picked');
+        offeneRueckfrage = null;
         notesEl.value = opt.send;
         handleSend();
       });
@@ -2141,6 +2142,7 @@
         ev.preventDefault();
         if (sendBtn.disabled) return;
         chip.classList.add('picked');
+        offeneRueckfrage = null;
         const pick = item.trainerPick || {};
         const join = pick.join != null ? pick.join : ' ';
         notesEl.value = item.button + join + name;
@@ -2221,8 +2223,14 @@
           row2.classList.add('picked');
           if (item.trainerPick && Array.isArray(trainers) && trainers.length){
             renderTrainerPicker(item, trainers);
+            const pick = item.trainerPick || {};
+            const join = pick.join != null ? pick.join : ' ';
+            const namen = trainers.filter(Boolean).map(n => String(n).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+            merkeRueckfrage(item.button + join + '{antwort}', namen.join('|'));
           } else if (Array.isArray(item.picker) && item.picker.length){
             renderConfirmOptions('Für welchen Zeitraum?', item.picker, 'in');
+            const vorlage = String(item.cmd || '').replace(/\[[^\]]*\]/, '{antwort}');
+            merkeRueckfrage(vorlage.indexOf('{antwort}') >= 0 ? vorlage : '', 'monat|woche|tag|jahr|quartal|\\d');
           } else {
             notesEl.value = item.button;
             handleSend();
@@ -2817,6 +2825,15 @@
   }
 
   // ── Senden ──────────────────────────────────────────────
+  // Rueckfrage aus der App (Zeitraum/Trainer-Auswahl): Der Server sieht diese Frage nie.
+  // Wird die Antwort stattdessen getippt oder gesprochen, schickt die naechste Nachricht
+  // eine Vorlage ("Welche Vertraege laufen {antwort} aus?") mit - der Server setzt die
+  // (bei Audio: transkribierte) Antwort ein. Gilt nur fuer die naechste Nachricht, max. 10 Min.
+  let offeneRueckfrage = null; // { vorlage, muster, ts }
+  function merkeRueckfrage(vorlage, muster){
+    offeneRueckfrage = vorlage ? { vorlage, muster: muster || '', ts: Date.now() } : null;
+  }
+
   async function handleSend(){
     const text = notesEl.value.trim();
     if (!text && !audioBlob) return;
@@ -2866,6 +2883,11 @@
     // Kundencode mitschicken, damit Fehlermeldungen nur an das
     // verursachende Geraet gehen (Push-Zuordnung in Make).
     formData.append('kunde_code', (typeof window.getKundenCode === 'function' ? (window.getKundenCode() || '') : ''));
+    if (offeneRueckfrage && Date.now() - offeneRueckfrage.ts < 10 * 60 * 1000){
+      formData.append('vorlage', offeneRueckfrage.vorlage);
+      if (offeneRueckfrage.muster) formData.append('muster', offeneRueckfrage.muster);
+    }
+    offeneRueckfrage = null;
     if (audioBlob){
       const mime = audioBlob.type || 'audio/webm';
       const ext = mime.includes('mp4') ? 'mp4' : 'webm';
